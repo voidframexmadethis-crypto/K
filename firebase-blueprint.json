@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "Beat": {
+      "title": "Beat Entity",
+      "description": "Represents a single musical track (beat) available for license.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 100 },
+        "producerId": { "type": "string" },
+        "bpm": { "type": "integer" },
+        "key": { "type": "string", "pattern": "^[A-G][#b]? (major|minor)$" },
+        "genre": { "type": "string" },
+        "subgenre": { "type": "string" },
+        "tags": { "type": "array", "maxLength": 10 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "audioUrl": { "type": "string", "format": "uri" },
+        "artworkUrl": { "type": "string", "format": "uri" },
+        "isFree": { "type": "boolean" },
+        "licenses": {
+          "type": "object",
+          "properties": {
+            "basic": { "type": "number" },
+            "premium": { "type": "number" },
+            "unlimited": { "type": "number" },
+            "exclusive": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "published": { "type": "boolean" }
+      },
+      "required": ["title", "audioUrl", "producerId"]
+    },
+    "BeatPack": {
+      "title": "Beat Pack Entity",
+      "description": "A collection of beats sold as a bundle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "artworkUrl": { "type": "string" },
+        "beatIds": { "type": "array" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Collection": {
+      "title": "Collection Entity",
+      "description": "A curated list of beats (e.g., Trap, Melodic).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "artworkUrl": { "type": "string" },
+        "slug": { "type": "string" }
+      }
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "Extended user data for customers and producers.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["producer", "customer"] },
+        "purchasedBeatIds": { "type": "array" },
+        "favoriteBeatIds": { "type": "array" },
+        "displayName": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/beats/{beatId}": {
+      "schema": "Beat",
+      "description": "Public catalog of available beats."
+    },
+    "/beatPacks/{packId}": {
+      "schema": "BeatPack",
+      "description": "Bundled products."
+    },
+    "/collections/{colId}": {
+      "schema": "Collection",
+      "description": "Curated genre/mood collections."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Private user profiles and libraries."
+    }
+  }
+}
