@@ -63,6 +63,22 @@
         "timestamp": { "type": "string", "format": "date-time" }
       }
     },
+    "Subscriber": {
+      "title": "Lead Subscriber",
+      "description": "Email captured from free beat downloads and newsletter gates.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "beatId": { "type": "string" },
+        "beatTitle": { "type": "string" },
+        "source": { "type": "string" },
+        "storefrontUrl": { "type": "string" },
+        "beatUrl": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email"]
+    },
     "VRReview": {
       "title": "VR Review Entity",
       "description": "Real-life VR studio headset listening review and spatial evaluation.",
@@ -107,6 +123,10 @@
     "/orders/{orderId}": {
       "schema": "Order",
       "description": "Store transactions and sales ledger."
+    },
+    "/subscribers/{subscriberId}": {
+      "schema": "Subscriber",
+      "description": "Captured newsletter leads and free download subscriber records."
     },
     "/vr_reviews/{reviewId}": {
       "schema": "VRReview",

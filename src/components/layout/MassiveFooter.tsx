@@ -24,9 +24,21 @@ export const MassiveFooter = () => {
               The definitive standalone producer ecosystem for modern artists and industry professionals. Redefining the standard of music technology platforms.
             </p>
             <div className="flex gap-8">
-              {[Youtube, Instagram, Twitter, MessageCircle].map((Icon, i) => (
-                <a key={i} href="#" className="text-white/20 hover:text-white transition-colors transform hover:-translate-y-1 transition-all duration-300">
-                  <Icon size={24} strokeWidth={2} />
+              {[
+                { icon: Youtube, href: 'https://youtube.com/@kraezelvbeatz', label: 'YouTube' },
+                { icon: Instagram, href: 'https://instagram.com/kraezelvbeatz', label: 'Instagram' },
+                { icon: Twitter, href: 'https://x.com/kraezelvbeatz', label: 'X (Twitter)' },
+                { icon: MessageCircle, href: 'https://discord.gg/kraezelv', label: 'Discord' }
+              ].map((item, i) => (
+                <a 
+                  key={i} 
+                  href={item.href} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  aria-label={item.label}
+                  className="text-white/20 hover:text-white transition-colors transform hover:-translate-y-1 transition-all duration-300"
+                >
+                  <item.icon size={24} strokeWidth={2} />
                 </a>
               ))}
             </div>
@@ -78,16 +90,29 @@ export const MassiveFooter = () => {
               <div key={section.title} className="flex flex-col gap-10">
                 <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/20">{section.title}</span>
                 <ul className="flex flex-col gap-4">
-                  {section.links.map(link => (
-                    <li key={link.name}>
-                      <Link 
-                        to={link.href} 
-                        className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors"
-                      >
-                        {link.name}
-                      </Link>
-                    </li>
-                  ))}
+                  {section.links.map(link => {
+                    const isExternal = link.href.startsWith('http') || link.href.startsWith('mailto:') || link.href.startsWith('tel:');
+                    return (
+                      <li key={link.name}>
+                        {isExternal ? (
+                          <a 
+                            href={link.href}
+                            {...(link.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                            className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors"
+                          >
+                            {link.name}
+                          </a>
+                        ) : (
+                          <Link 
+                            to={link.href} 
+                            className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors"
+                          >
+                            {link.name}
+                          </Link>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -99,9 +124,9 @@ export const MassiveFooter = () => {
            <div className="flex flex-col md:flex-row items-center gap-12 text-[8px] font-bold uppercase tracking-[0.4em] text-white/20">
               <span>© 2026 KRAEZELVBEATZ PLATFORM</span>
               <div className="flex gap-8">
-                 <a href="#" className="hover:text-white transition-colors">Privacy Architecture</a>
-                 <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-                 <a href="#" className="hover:text-white transition-colors">Licensing Agreement</a>
+                 <Link to="/services" className="hover:text-white transition-colors">Privacy Architecture</Link>
+                 <Link to="/services" className="hover:text-white transition-colors">Terms of Service</Link>
+                 <Link to="/beats" className="hover:text-white transition-colors">Licensing Agreement</Link>
               </div>
            </div>
            

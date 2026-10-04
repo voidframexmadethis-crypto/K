@@ -58,12 +58,17 @@ export const ContentLab = () => {
     const result = await generateVideo(variant.script, variant.templateId, variant.aspectRatio);
 
     if (result.status === 'success') {
-      const beat = beats.find(b => b.id === currentCampaign.productId);
-      logAnalyticsEvent({
-        eventType: 'ad_created',
-        beatId: currentCampaign.productId,
-        beatTitle: beat?.title,
-      });
+      const beat = currentCampaign.productId ? beats.find(b => b.id === currentCampaign.productId) : null;
+      const eventPayload: any = {
+        eventType: 'ad_created'
+      };
+      if (currentCampaign.productId) {
+        eventPayload.beatId = currentCampaign.productId;
+      }
+      if (beat?.title) {
+        eventPayload.beatTitle = beat.title;
+      }
+      logAnalyticsEvent(eventPayload);
     }
 
     setCampaigns(prev => prev.map(c => c.id === currentCampaign.id ? {

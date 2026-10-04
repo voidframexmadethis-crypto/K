@@ -93,7 +93,7 @@ export const MainHeader = () => {
           </span>
           <span className="h-2 w-px bg-white/10" />
           {/* 10. Help & Comprehensive FAQ Repository */}
-          <a href="#faq" className="flex items-center gap-1.5 hover:text-white transition-colors">
+          <a href="mailto:kraezelv@gmail.com?subject=KRAEZELVbeatz%20Support%20%26%20FAQ" className="flex items-center gap-1.5 hover:text-white transition-colors">
             <HelpCircle size={12} /> Help & FAQ
           </a>
         </div>

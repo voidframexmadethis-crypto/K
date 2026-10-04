@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { OrderRecord, AnalyticsEventData } from './services/analyticsService';
 import { MainHeader } from './components/layout/Header';
@@ -126,18 +126,6 @@ const DashboardOverview = () => {
     </div>
   );
 };
-
-const DashboardPlaceholder = ({ title }: { title: string }) => (
-  <div className="flex flex-col gap-12">
-    <div>
-      <h2 className="text-4xl font-bold uppercase tracking-tighter text-white mb-4">{title}</h2>
-      <p className="text-white/40 text-sm uppercase tracking-widest">Module under construction</p>
-    </div>
-    <div className="py-40 border border-white/5 bg-white/[0.01] flex items-center justify-center">
-       <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-white/20 italic">Initializing module...</span>
-    </div>
-  </div>
-);
 
 const LogoutHandler = () => {
   useEffect(() => {

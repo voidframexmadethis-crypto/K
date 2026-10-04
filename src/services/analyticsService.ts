@@ -1,12 +1,7 @@
 import { 
   collection, 
   addDoc, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  limit, 
-  serverTimestamp,
-  getDocs
+  serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -62,6 +57,30 @@ export interface VRReviewRecord {
 const COUNTRIES = ['United States', 'United Kingdom', 'Canada', 'Germany', 'France', 'Japan', 'Australia', 'Brazil'];
 const DEVICES = ['Desktop (Mac)', 'Desktop (Windows)', 'Mobile (iOS)', 'Mobile (Android)', 'Meta Quest 3', 'Apple Vision Pro'];
 
+/**
+ * Universal deep sanitization helper to strip any undefined or NaN properties
+ * recursively before saving to Firestore, preventing runtime exceptions.
+ */
+export function sanitizeFirestorePayload<T extends Record<string, any>>(payload: T): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined) continue;
+    if (typeof value === 'number' && isNaN(value)) continue;
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Date) &&
+      !('_methodName' in value)
+    ) {
+      sanitized[key] = sanitizeFirestorePayload(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 // Helper to record a live analytics event
 export async function logAnalyticsEvent(data: Omit<AnalyticsEventData, 'id' | 'timestamp'>) {
   try {
@@ -76,15 +95,7 @@ export async function logAnalyticsEvent(data: Omit<AnalyticsEventData, 'id' | 't
       timestamp: serverTimestamp()
     };
 
-    // Sanitization: Remove any undefined or NaN properties to prevent Firestore errors
-    const sanitizedPayload = Object.keys(payload).reduce((acc: any, key) => {
-      const value = payload[key];
-      if (value !== undefined && !(typeof value === 'number' && isNaN(value))) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {});
-    
+    const sanitizedPayload = sanitizeFirestorePayload(payload);
     await addDoc(collection(db, 'analytics_events'), sanitizedPayload);
   } catch (err) {
     console.warn('Analytics event logging fallback:', err);
@@ -94,16 +105,22 @@ export async function logAnalyticsEvent(data: Omit<AnalyticsEventData, 'id' | 't
 // Helper to record a lead subscriber (Beehiiv / Free Download Gate)
 export async function recordLeadSubscriber(lead: Omit<LeadSubscriberRecord, 'id' | 'timestamp'>) {
   try {
-    const docRef = await addDoc(collection(db, 'subscribers'), {
+    const cleanLead = sanitizeFirestorePayload({
       ...lead,
       timestamp: serverTimestamp()
     });
+    const docRef = await addDoc(collection(db, 'subscribers'), cleanLead);
 
-    await logAnalyticsEvent({
-      eventType: 'free_download',
-      beatId: lead.beatId,
-      beatTitle: lead.beatTitle
-    });
+    const eventPayload: any = {
+      eventType: 'free_download'
+    };
+    if (lead.beatId) {
+      eventPayload.beatId = lead.beatId;
+    }
+    if (lead.beatTitle) {
+      eventPayload.beatTitle = lead.beatTitle;
+    }
+    await logAnalyticsEvent(eventPayload);
 
     return docRef.id;
   } catch (err) {
@@ -115,18 +132,24 @@ export async function recordLeadSubscriber(lead: Omit<LeadSubscriberRecord, 'id'
 // Helper to record a store purchase
 export async function recordStoreOrder(order: Omit<OrderRecord, 'id' | 'timestamp'>) {
   try {
-    const docRef = await addDoc(collection(db, 'orders'), {
+    const cleanOrder = sanitizeFirestorePayload({
       ...order,
       timestamp: serverTimestamp()
     });
+    const docRef = await addDoc(collection(db, 'orders'), cleanOrder);
 
     // Also log matching checkout analytics event
-    await logAnalyticsEvent({
+    const eventPayload: any = {
       eventType: 'checkout_completed',
-      beatId: order.beatId,
-      beatTitle: order.beatTitle,
       amount: order.amount
-    });
+    };
+    if (order.beatId) {
+      eventPayload.beatId = order.beatId;
+    }
+    if (order.beatTitle) {
+      eventPayload.beatTitle = order.beatTitle;
+    }
+    await logAnalyticsEvent(eventPayload);
 
     return docRef.id;
   } catch (err) {
@@ -138,10 +161,11 @@ export async function recordStoreOrder(order: Omit<OrderRecord, 'id' | 'timestam
 // Helper to submit a VR review
 export async function submitVRReview(review: Omit<VRReviewRecord, 'id' | 'timestamp'>) {
   try {
-    const docRef = await addDoc(collection(db, 'vr_reviews'), {
+    const cleanReview = sanitizeFirestorePayload({
       ...review,
       timestamp: serverTimestamp()
     });
+    const docRef = await addDoc(collection(db, 'vr_reviews'), cleanReview);
     return docRef.id;
   } catch (err) {
     console.error('Failed to submit VR review:', err);

@@ -3,9 +3,7 @@ import {
   collection, 
   onSnapshot, 
   query, 
-  orderBy, 
-  addDoc, 
-  serverTimestamp 
+  orderBy 
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { OrderRecord, recordStoreOrder } from '../../services/analyticsService';

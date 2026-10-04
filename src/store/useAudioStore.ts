@@ -50,11 +50,16 @@ export const useAudioStore = create<AudioStore>((set) => ({
   setBeat: (beat) => {
     // Dynamically log analytics event
     import('../services/analyticsService').then(({ logAnalyticsEvent }) => {
-      logAnalyticsEvent({
-        eventType: 'play',
-        beatId: beat.id,
-        beatTitle: beat.title
-      });
+      const eventPayload: any = {
+        eventType: 'play'
+      };
+      if (beat?.id) {
+        eventPayload.beatId = beat.id;
+      }
+      if (beat?.title) {
+        eventPayload.beatTitle = beat.title;
+      }
+      logAnalyticsEvent(eventPayload);
     }).catch(() => {});
 
     set((state) => {

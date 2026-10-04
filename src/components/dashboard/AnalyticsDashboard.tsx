@@ -7,7 +7,7 @@ import {
   limit 
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { AnalyticsEventData, logAnalyticsEvent } from '../../services/analyticsService';
+import { AnalyticsEventData } from '../../services/analyticsService';
 import { 
   BarChart3, 
   Activity, 
