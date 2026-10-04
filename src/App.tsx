@@ -25,6 +25,8 @@ import { ContentLab } from './components/dashboard/ContentLab';
 import { Achievements } from './components/dashboard/Achievements';
 import { VRReviewsSuite } from './components/vr/VRReviewsSuite';
 import { RemoveBeatsFromPlayer } from './components/dashboard/RemoveBeatsFromPlayer';
+import { ProfileSettings } from './components/dashboard/ProfileSettings';
+import { ProducerProfilePage } from './pages/ProducerProfilePage';
 import { CustomerLibrary } from './pages/CustomerLibrary';
 import { AudioPlayerPage } from './pages/AudioPlayerPage';
 import { cn } from './lib/utils';
@@ -146,6 +148,8 @@ export default function App() {
           <Route path="/videos" element={<VideosPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/profile" element={<ProducerProfilePage />} />
+          <Route path="/producer/*" element={<ProducerProfilePage />} />
           <Route path="/audio-player" element={<AudioPlayerPage />} />
           <Route path="/account" element={<CustomerLibrary />} />
           <Route 
@@ -163,7 +167,7 @@ export default function App() {
                   <Route path="/marketing" element={<MarketingDashboard />} />
                   <Route path="/content" element={<ContentLab />} />
                   <Route path="/achievements" element={<Achievements />} />
-                  <Route path="/settings" element={<DashboardPlaceholder title="Settings" />} />
+                  <Route path="/settings" element={<ProfileSettings />} />
                   <Route path="*" element={<div className="py-20 text-center uppercase tracking-widest text-white/20">Module Under Construction</div>} />
                 </Routes>
               </DashboardLayout>

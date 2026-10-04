@@ -45,6 +45,7 @@ export const MainHeader = () => {
 
   const navLinks = [
     { name: 'Beats', href: '/beats' },
+    { name: 'Profile', href: '/profile' },
     { name: 'Collections', href: '/collections' },
     { name: 'Beat Packs', href: '/packs' },
     { name: 'Free Beats', href: '/free-beats' },
@@ -55,6 +56,7 @@ export const MainHeader = () => {
 
   const accountLinks = [
     { name: 'DASHBOARD', href: '/dashboard', icon: LayoutDashboard, prominent: true },
+    { name: 'View Public Profile', href: '/profile', icon: User },
     { name: 'My Beats', href: '/dashboard/music', icon: Music },
     { name: 'Upload Beat', href: '/dashboard/upload', icon: Plus },
     { name: 'Beat Packs', href: '/packs', icon: ShoppingBag },
