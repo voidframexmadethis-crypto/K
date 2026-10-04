@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { HeroSpotlightCarousel } from '../components/home/HeroSpotlightCarousel';
 import { DiscoveryBar } from '../components/home/DiscoveryBar';
+import { SoundClickDiscoverySuite } from '../components/home/SoundClickDiscoverySuite';
 import { TopTracksScoreboard } from '../components/home/TopTracksScoreboard';
 import { ContentFeedModule } from '../components/home/ContentFeedModule';
 import { DiscoveryCarousels } from '../components/home/DiscoveryCarousels';
@@ -21,6 +22,9 @@ export const HomePage = () => {
 
       {/* 3. Discovery & Filter Bar */}
       <DiscoveryBar />
+
+      {/* SoundClick Discovery & Music Charts Suite */}
+      <SoundClickDiscoverySuite />
 
       {/* 4. Top Tracks Trending Scoreboard (1 to 10 Chart with Quick-Buy Licensing Modal) */}
       <TopTracksScoreboard />

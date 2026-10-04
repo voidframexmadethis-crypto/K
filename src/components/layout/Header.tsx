@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Heart, ShoppingCart, User, Menu, X, Youtube, PlayCircle, ChevronDown, ExternalLink, LayoutDashboard, Music, Plus, BarChart3, ShoppingBag, Video, Settings, LogOut, Target } from 'lucide-react';
+import { 
+  Search, Heart, ShoppingCart, User, Menu, X, Youtube, PlayCircle, ChevronDown, 
+  ExternalLink, LayoutDashboard, Music, Plus, BarChart3, ShoppingBag, Video, 
+  Settings, LogOut, Target, Globe, Smartphone, Sun, Moon, HelpCircle, UserPlus, LogIn, Sparkles
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 
@@ -8,6 +12,12 @@ export const MainHeader = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [searchCategory, setSearchCategory] = useState('Songs');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [language, setLanguage] = useState('EN');
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
   const accountRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
@@ -41,7 +51,6 @@ export const MainHeader = () => {
     { name: 'Audio Player', href: '/audio-player' },
     { name: 'Merch', href: '/merch' },
     { name: 'Videos', href: '/videos' },
-    { name: 'YouTube', href: 'https://youtube.com', external: true },
   ];
 
   const accountLinks = [
@@ -49,149 +58,174 @@ export const MainHeader = () => {
     { name: 'My Beats', href: '/dashboard/music', icon: Music },
     { name: 'Upload Beat', href: '/dashboard/upload', icon: Plus },
     { name: 'Beat Packs', href: '/packs', icon: ShoppingBag },
-    { name: 'Collections', href: '/collections', icon: PlayCircle },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Marketing', href: '/dashboard/marketing', icon: Target },
-    { name: 'Sales & Orders', href: '/dashboard/sales', icon: ShoppingBag },
-    { name: 'Content Lab', href: '/dashboard/content', icon: Video },
-    { name: 'YouTube', href: 'https://youtube.com', icon: Youtube, external: true },
-    { name: 'Merch Manager', href: '/merch', icon: ShoppingBag },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
     { name: 'Log Out', href: '/logout', icon: LogOut, danger: true },
-  ];
-
-  const utilities = [
-    { icon: Search, label: 'Search', action: () => {} },
-    { icon: Heart, label: 'Favorites', href: '/favorites' },
-    { icon: ShoppingCart, label: 'Cart', href: '/cart', count: 0 },
   ];
 
   return (
     <header 
       className={cn(
         "fixed top-0 left-0 w-full z-[100] transition-all duration-500",
-        isScrolled ? "bg-black/95 backdrop-blur-xl border-b border-white/5 py-4" : "bg-transparent py-8"
+        isScrolled ? "bg-black/95 backdrop-blur-xl border-b border-white/10 py-3" : "bg-black/80 backdrop-blur-md py-4 border-b border-white/5"
       )}
     >
-      <div className="max-w-[1800px] mx-auto px-6 md:px-12 flex items-center justify-between">
-        {/* Zone 1: Logo */}
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-white flex items-center justify-center rounded-sm group-hover:rotate-90 transition-transform duration-500">
-            <div className="w-6 h-1 bg-black" />
+      {/* Top Banner Ribbon: App Downloads & Global Language & Help */}
+      <div className="hidden lg:flex items-center justify-between max-w-[1800px] mx-auto px-6 md:px-12 text-[9px] font-black uppercase tracking-widest text-white/40 pb-2 border-b border-white/5 mb-3">
+        <div className="flex items-center gap-6">
+          {/* 7. Mobile App Store Redirection Ribbons */}
+          <span className="flex items-center gap-2 text-white/60 hover:text-white transition-colors cursor-pointer">
+            <Smartphone size={12} /> Get Mobile App: <span className="text-white underline">iOS</span> · <span className="text-white underline">Android</span>
+          </span>
+          <span className="h-2 w-px bg-white/10" />
+          {/* 10. Help & Comprehensive FAQ Repository */}
+          <a href="#faq" className="flex items-center gap-1.5 hover:text-white transition-colors">
+            <HelpCircle size={12} /> Help & FAQ
+          </a>
+        </div>
+
+        <div className="flex items-center gap-6">
+          {/* 8. Dark/Light Mode Toggle */}
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)} 
+            className="flex items-center gap-1.5 hover:text-white transition-colors"
+          >
+            {isDarkMode ? <Moon size={12} /> : <Sun size={12} />} {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+          </button>
+
+          <span className="h-2 w-px bg-white/10" />
+
+          {/* 9. Global Language Translation Selector */}
+          <div className="flex items-center gap-1.5 cursor-pointer hover:text-white">
+            <Globe size={12} />
+            <select 
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="bg-transparent text-[9px] font-black uppercase text-white outline-none cursor-pointer"
+            >
+              <option value="EN" className="bg-neutral-900">🇺🇸 EN</option>
+              <option value="ES" className="bg-neutral-900">🇪🇸 ES</option>
+              <option value="DE" className="bg-neutral-900">🇩🇪 DE</option>
+              <option value="FR" className="bg-neutral-900">🇫🇷 FR</option>
+              <option value="JP" className="bg-neutral-900">🇯🇵 JP</option>
+            </select>
           </div>
-          <span className="text-2xl font-black tracking-[0.2em] text-white uppercase leading-none">
+        </div>
+      </div>
+
+      <div className="max-w-[1800px] mx-auto px-6 md:px-12 flex items-center justify-between gap-6">
+        {/* 1. Master Brand Identity Logo */}
+        <Link to="/" className="flex items-center gap-3 shrink-0 group">
+          <div className="w-9 h-9 bg-white flex items-center justify-center rounded-sm group-hover:rotate-90 transition-transform duration-500">
+            <div className="w-5 h-1 bg-black" />
+          </div>
+          <span className="text-xl md:text-2xl font-black tracking-[0.2em] text-white uppercase leading-none">
             KRAEZELV<span className="text-white/40">BEATZ</span>
           </span>
         </Link>
 
+        {/* 5. Universal Site Search Bar & 6. Search Filter Dropdown Matrix */}
+        <div className="hidden xl:flex items-center flex-1 max-w-lg bg-white/5 border border-white/10 p-1.5">
+          <select 
+            value={searchCategory}
+            onChange={(e) => setSearchCategory(e.target.value)}
+            className="bg-black/60 text-white text-[9px] font-black uppercase p-2 border border-white/10 outline-none cursor-pointer shrink-0"
+          >
+            <option value="Songs" className="bg-neutral-900">Songs</option>
+            <option value="Beats" className="bg-neutral-900">Beats</option>
+            <option value="Artists" className="bg-neutral-900">Artists</option>
+            <option value="Albums" className="bg-neutral-900">Albums</option>
+          </select>
+          <div className="relative flex-1 flex items-center ml-2">
+            <Search size={14} className="text-white/30 mr-2 shrink-0" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`SEARCH MILLIONS OF ${searchCategory.toUpperCase()}...`}
+              className="w-full bg-transparent text-[10px] font-bold text-white uppercase tracking-widest outline-none placeholder:text-white/30"
+            />
+          </div>
+        </div>
+
         {/* Zone 2: Navigation */}
-        <nav className="hidden lg:flex items-center gap-6 xl:gap-10">
+        <nav className="hidden lg:flex items-center gap-5 xl:gap-8">
           {navLinks.map((link) => (
-            link.external ? (
-              <a
-                key={link.name}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] font-bold uppercase tracking-[0.2em] xl:tracking-[0.3em] text-white/40 hover:text-white transition-all duration-300 whitespace-nowrap"
-              >
-                {link.name}
-              </a>
-            ) : (
-              <Link
-                key={link.name}
-                to={link.href}
-                className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.2em] xl:tracking-[0.3em] transition-all duration-300 whitespace-nowrap",
-                  location.pathname === link.href ? "text-white" : "text-white/40 hover:text-white"
-                )}
-              >
-                {link.name}
-              </Link>
-            )
+            <Link
+              key={link.name}
+              to={link.href}
+              className={cn(
+                "text-[10px] font-bold uppercase tracking-[0.2em] transition-all duration-300 whitespace-nowrap",
+                location.pathname === link.href ? "text-white" : "text-white/40 hover:text-white"
+              )}
+            >
+              {link.name}
+            </Link>
           ))}
         </nav>
 
-        {/* Zone 3: Utilities */}
-        <div className="flex items-center gap-8">
-          <div className="hidden md:flex items-center gap-6 border-r border-white/10 pr-8 mr-2">
-            {utilities.map((item) => (
-              <Link
-                key={item.label}
-                to={item.href || '#'}
-                className="relative text-white/40 hover:text-white transition-colors group"
-              >
-                <item.icon size={18} strokeWidth={2.5} />
-                {item.count !== undefined && (
-                  <span className="absolute -top-2 -right-2 w-4 h-4 bg-white text-black text-[8px] font-black rounded-full flex items-center justify-center">
-                    {item.count}
-                  </span>
-                )}
-              </Link>
-            ))}
+        {/* Zone 3: Account & Artist Onboarding CTAs (Items 2, 3, 4) */}
+        <div className="flex items-center gap-4 shrink-0">
+          {/* 4. New Artist Ingestion Portal CTA */}
+          <Link 
+            to="/dashboard/upload"
+            className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-md"
+          >
+            <Sparkles size={12} /> Artist Portal
+          </Link>
 
-            {/* Account Dropdown Control */}
-            <div className="relative" ref={accountRef}>
-              <button 
-                onClick={() => setIsAccountOpen(!isAccountOpen)}
-                className={cn(
-                  "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300",
-                  isAccountOpen ? "text-white" : "text-white/40 hover:text-white"
-                )}
-                aria-expanded={isAccountOpen}
-                aria-haspopup="true"
-              >
-                <User size={18} strokeWidth={2.5} />
-                <span>Account</span>
-                <ChevronDown size={14} className={cn("transition-transform duration-300", isAccountOpen && "rotate-180")} />
-              </button>
+          {/* 3. New Fan Account Registration CTA */}
+          <button 
+            onClick={() => setShowLoginModal(true)}
+            className="hidden md:flex items-center gap-2 px-4 py-2.5 border border-white/20 text-white text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all"
+          >
+            <UserPlus size={12} /> Sign Up
+          </button>
 
-              <AnimatePresence>
-                {isAccountOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="absolute right-0 mt-6 w-64 bg-black/95 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden z-[110]"
-                  >
-                    <div className="flex flex-col py-2">
-                      {accountLinks.map((link) => (
-                        link.external ? (
-                          <a
-                            key={link.name}
-                            href={link.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/40 hover:text-white hover:bg-white/5 transition-all"
-                          >
-                            <span className="flex items-center gap-3">
-                              <link.icon size={14} />
-                              {link.name}
-                            </span>
-                            <ExternalLink size={12} />
-                          </a>
-                        ) : (
-                          <Link
-                            key={link.name}
-                            to={link.href}
-                            className={cn(
-                              "flex items-center gap-3 px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-                              link.prominent ? "bg-white text-black hover:bg-neutral-200" : 
-                              link.danger ? "text-red-500 hover:bg-red-500/10" :
-                              "text-white/40 hover:text-white hover:bg-white/5"
-                            )}
-                          >
-                            <link.icon size={14} />
-                            {link.name}
-                          </Link>
-                        )
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+          {/* Account Dropdown */}
+          <div className="relative" ref={accountRef}>
+            <button 
+              onClick={() => setIsAccountOpen(!isAccountOpen)}
+              className={cn(
+                "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 border border-white/10 px-3 py-2 bg-white/5",
+                isAccountOpen ? "text-white bg-white/10" : "text-white/60 hover:text-white"
+              )}
+            >
+              <User size={16} />
+              <span className="hidden sm:inline">Account</span>
+              <ChevronDown size={12} className={cn("transition-transform duration-300", isAccountOpen && "rotate-180")} />
+            </button>
+
+            <AnimatePresence>
+              {isAccountOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 mt-4 w-64 bg-black/95 backdrop-blur-2xl border border-white/15 shadow-2xl overflow-hidden z-[110]"
+                >
+                  <div className="flex flex-col py-2">
+                    {accountLinks.map((link) => (
+                      <Link
+                        key={link.name}
+                        to={link.href}
+                        className={cn(
+                          "flex items-center gap-3 px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                          link.prominent ? "bg-white text-black hover:bg-neutral-200" : 
+                          link.danger ? "text-red-500 hover:bg-red-500/10" :
+                          "text-white/50 hover:text-white hover:bg-white/5"
+                        )}
+                      >
+                        <link.icon size={14} />
+                        {link.name}
+                      </Link>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <button 
@@ -202,6 +236,39 @@ export const MainHeader = () => {
           </button>
         </div>
       </div>
+
+      {/* 2. Unified Account Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
+          <div className="bg-black border border-white/20 p-8 max-w-md w-full space-y-6 relative shadow-2xl">
+            <button 
+              onClick={() => setShowLoginModal(false)}
+              className="absolute top-4 right-4 text-white/40 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[9px] font-black uppercase tracking-[0.4em] text-white/40">SoundClick Gateway</span>
+              <h3 className="text-2xl font-black uppercase text-white tracking-tight">Account Login / Register</h3>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); setShowLoginModal(false); alert('Logged in successfully!'); }} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-white/40 block">Username or Email</label>
+                <input type="text" required className="w-full bg-white/5 border border-white/10 p-3 text-xs font-bold text-white outline-none" placeholder="USER@KRAEZELV.COM" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-white/40 block">Password</label>
+                <input type="password" required className="w-full bg-white/5 border border-white/10 p-3 text-xs font-bold text-white outline-none" placeholder="••••••••" />
+              </div>
+              <button type="submit" className="w-full py-4 bg-white text-black font-black uppercase tracking-[0.3em] text-xs hover:bg-neutral-200 transition-all">
+                Sign In To Platform
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Mobile/iPad Navigation Overlay */}
       <div 
@@ -216,26 +283,14 @@ export const MainHeader = () => {
               <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/20">Navigation</span>
               <nav className="flex flex-col gap-6">
                 {navLinks.map((link) => (
-                  link.external ? (
-                    <a
-                      key={link.name}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-4xl md:text-6xl font-bold uppercase tracking-tighter text-white hover:text-white/40 transition-colors"
-                    >
-                      {link.name}
-                    </a>
-                  ) : (
-                    <Link
-                      key={link.name}
-                      to={link.href}
-                      onClick={() => setIsMenuOpen(false)}
-                      className="text-4xl md:text-6xl font-bold uppercase tracking-tighter text-white hover:text-white/40 transition-colors"
-                    >
-                      {link.name}
-                    </Link>
-                  )
+                  <Link
+                    key={link.name}
+                    to={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="text-4xl md:text-6xl font-bold uppercase tracking-tighter text-white hover:text-white/40 transition-colors"
+                  >
+                    {link.name}
+                  </Link>
                 ))}
               </nav>
             </div>
@@ -244,46 +299,22 @@ export const MainHeader = () => {
               <div className="flex flex-col gap-8">
                 <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/20">User Space</span>
                 <div className="flex flex-col gap-6">
-                  {/* Account Dropdown in Mobile */}
                   <div className="flex flex-col gap-4">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-white flex items-center gap-2">
                        <User size={14} /> Account Details
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {accountLinks.map(link => (
-                        link.external ? (
-                          <a
-                            key={link.name}
-                            href={link.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-4 bg-white/5 text-[10px] font-black uppercase tracking-widest text-white/60"
-                          >
-                            <link.icon size={16} /> {link.name}
-                          </a>
-                        ) : (
-                          <Link
-                            key={link.name}
-                            to={link.href}
-                            onClick={() => setIsMenuOpen(false)}
-                            className={cn(
-                              "flex items-center gap-3 p-4 text-[10px] font-black uppercase tracking-widest transition-all",
-                              link.prominent ? "bg-white text-black" : "bg-white/5 text-white/60"
-                            )}
-                          >
-                            <link.icon size={16} /> {link.name}
-                          </Link>
-                        )
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-4 mt-8">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/20">Quick Access</span>
-                    <div className="flex flex-col gap-4">
-                      {utilities.map(u => (
-                        <Link key={u.label} to={u.href || '#'} onClick={() => setIsMenuOpen(false)} className="text-xl font-bold uppercase text-white/60 hover:text-white flex items-center gap-4">
-                          <u.icon size={20} /> {u.label}
+                        <Link
+                          key={link.name}
+                          to={link.href}
+                          onClick={() => setIsMenuOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 p-4 text-[10px] font-black uppercase tracking-widest transition-all",
+                            link.prominent ? "bg-white text-black" : "bg-white/5 text-white/60"
+                          )}
+                        >
+                          <link.icon size={16} /> {link.name}
                         </Link>
                       ))}
                     </div>
@@ -292,10 +323,6 @@ export const MainHeader = () => {
               </div>
 
               <div className="flex flex-col gap-6 pt-12">
-                <div className="flex gap-6">
-                  <Youtube className="text-white/40" />
-                  <PlayCircle className="text-white/40" />
-                </div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/20">
                   © 2026 KRAEZELVBEATZ
                 </p>
