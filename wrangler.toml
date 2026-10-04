@@ -1,0 +1,8 @@
+name = "kraezelvbeatz-storefront"
+pages_build_output_dir = "dist"
+
+[vars]
+IA_COLLECTION = "opensource_audio"
+
+[placement]
+mode = "smart"

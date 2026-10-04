@@ -1,12 +1,12 @@
 {
-  "projectId": "ai-studio-applet-webapp-b9c79",
-  "appId": "1:1035221798648:web:683bf9b2cbebd30445b50d",
-  "apiKey": "AIzaSyDsKmcpeZvr6cPb5ff48EkwlqKiABOYZm4",
-  "authDomain": "ai-studio-applet-webapp-b9c79.firebaseapp.com",
+  "projectId": "rich-ensign-qghtt",
+  "appId": "1:492306407832:web:8f5f13ae81cc1665638bed",
+  "apiKey": "AIzaSyBwgW9Dn_9Ym45A9owK3GLIckE2BH1FonE",
+  "authDomain": "rich-ensign-qghtt.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-kraezelvbeatz-d2c2aaa8-d722-4068-b5e4-053e0f62ae16",
-  "storageBucket": "ai-studio-applet-webapp-b9c79.firebasestorage.app",
-  "messagingSenderId": "1035221798648",
+  "storageBucket": "rich-ensign-qghtt.firebasestorage.app",
+  "messagingSenderId": "492306407832",
   "measurementId": "",
-  "oAuthClientId": "1035221798648-9duq76u27b7nv78d7mgifadkkivgp3p8.apps.googleusercontent.com",
+  "oAuthClientId": "492306407832-vsna7jdbfnv1tog0ie25pn5dfvekiu00.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

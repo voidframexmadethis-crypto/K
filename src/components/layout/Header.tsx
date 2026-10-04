@@ -8,7 +8,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { auth } from '../../lib/firebase';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 export const MainHeader = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -272,22 +272,27 @@ export const MainHeader = () => {
 
             <div className="space-y-1">
               <span className="text-[9px] font-black uppercase tracking-[0.4em] text-white/40">SoundClick Gateway</span>
-              <h3 className="text-2xl font-black uppercase text-white tracking-tight">Account Login / Register</h3>
+              <h3 className="text-2xl font-black uppercase text-white tracking-tight">Producer & Fan Login</h3>
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); setShowLoginModal(false); alert('Logged in successfully!'); }} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-white/40 block">Username or Email</label>
-                <input type="text" required className="w-full bg-white/5 border border-white/10 p-3 text-xs font-bold text-white outline-none" placeholder="USER@KRAEZELV.COM" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-white/40 block">Password</label>
-                <input type="password" required className="w-full bg-white/5 border border-white/10 p-3 text-xs font-bold text-white outline-none" placeholder="••••••••" />
-              </div>
-              <button type="submit" className="w-full py-4 bg-white text-black font-black uppercase tracking-[0.3em] text-xs hover:bg-neutral-200 transition-all">
-                Sign In To Platform
+            <div className="space-y-4">
+              <button 
+                type="button"
+                onClick={async () => {
+                  try {
+                    const provider = new GoogleAuthProvider();
+                    await signInWithPopup(auth, provider);
+                    setShowLoginModal(false);
+                  } catch (err: any) {
+                    console.error('Google sign-in error:', err);
+                    alert(err?.message || 'Google sign-in failed');
+                  }
+                }}
+                className="w-full py-4 bg-white text-black font-black uppercase tracking-[0.2em] text-xs hover:bg-neutral-200 transition-all flex items-center justify-center gap-3"
+              >
+                Sign In With Google
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}

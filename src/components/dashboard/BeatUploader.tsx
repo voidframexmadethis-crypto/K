@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
-import { uploadToR2AndArchive } from '../../lib/storageEngine';
+import { uploadToStorage, validateAudioFile } from '../../lib/storageEngine';
 import { BEEHIIV_CONFIG } from '../../config/beehiiv';
 import { Beat } from '../../types';
 import { 
@@ -44,10 +44,16 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
   const [isPublishSuccess, setIsPublishSuccess] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
+  // Upload loading indicators
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [isUploadingArtwork, setIsUploadingArtwork] = useState(false);
+  const [isUploadingStems, setIsUploadingStems] = useState(false);
+
   // Ref lock is 100% synchronous at method entry before any React re-renders or async events
   const isSubmittingRef = useRef(false);
   const currentSubmissionIdRef = useRef<string | null>(null);
   const createdBeatResultRef = useRef<Beat | null>(null);
+  const activeBeatIdRef = useRef<string>(editingBeat?.id || `beat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
 
   // --- COMPREHENSIVE FORM STATE FOR ALL FEATURES ---
   const [formData, setFormData] = useState({
@@ -63,10 +69,11 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     lyrics: '[Intro]\nYeah, KRAEZELV on the track...\n[Chorus]\nSliding through the dark...',
 
     // 2. Audio & Watermarking
-    audioUrl: '',
-    artworkUrl: '',
-    stemsUrl: '',
-    archiveVaultUrl: '',
+    audioUrl: editingBeat?.audioUrl || '',
+    artworkUrl: editingBeat?.artworkUrl || '',
+    stemsUrl: editingBeat?.stemsUrl || '',
+    archiveVaultUrl: editingBeat?.storage?.audioUrl || editingBeat?.audioUrl || '',
+    archiveItemId: editingBeat?.storage?.itemId || '',
     isPreTaggedUpload: false,
     isWatermarkEnabled: true,
     globalVoicetagProfile: 'KRAEZELV_Official_Signature.wav',
@@ -254,7 +261,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
       // 5. Handle Editing Existing Beat vs Creating New Beat
       const editingId = editingBeat?.id || (formData as any).editingBeatId;
       if (editingId) {
-        updateBeat(editingId, {
+        await updateBeat(editingId, {
           title: formData.title || 'Untitled Beat',
           bpm: parseInt(formData.bpm) || 140,
           key: formData.key || 'C Minor',
@@ -284,13 +291,28 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         return;
       }
 
+      // Validate audioUrl before creating beat
+      if (!formData.audioUrl) {
+        setSubmissionError('Please select and upload a valid MP3 or M4A audio file before publishing.');
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
+      if (formData.audioUrl.startsWith('data:') || formData.audioUrl.startsWith('blob:')) {
+        setSubmissionError('Temporary or base64 audio URLs are not permitted. Please re-upload the master audio file.');
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
       // 6. Create NEW Beat Record
-      const newBeatId = `user-beat-${Date.now()}`;
+      const newBeatId = activeBeatIdRef.current;
       const newBeat: Beat = {
         id: newBeatId,
         idempotencyKey,
         title: formData.title || 'Untitled Beat',
-        producerId: 'KRAEZELVbeatz',
+        producerId: formData.producerId || 'KRAEZELVbeatz',
         bpm: parseInt(formData.bpm) || 140,
         key: formData.key || 'C Minor',
         genre: formData.primaryGenre || 'Trap',
@@ -301,8 +323,8 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         isPrivate: !formData.isPublic,
         isBootleg: false,
         instruments: formData.instruments || [],
-        audioUrl: formData.audioUrl || '',
-        artworkUrl: formData.artworkUrl || '',
+        audioUrl: formData.audioUrl,
+        artworkUrl: formData.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80',
         stemsUrl: formData.stemsUrl || '',
         isFree: formData.isFreeDownload,
         freeDownloadEnabled: formData.isFreeDownload,
@@ -321,20 +343,19 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
           unlimited: { price: parseFloat(formData.stemsLeasePrice) || 99.99, enabled: formData.enabledLicenses.unlimited },
           exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
         },
+        storage: {
+          provider: 'internet_archive',
+          itemId: formData.archiveItemId || `kraezelvbeatz-${newBeatId.toLowerCase().replace(/[^a-z0-9_-]/g, '')}`,
+          audioUrl: formData.audioUrl,
+          artworkUrl: formData.artworkUrl,
+          stemsUrl: formData.stemsUrl || '',
+          uploadedAt: new Date().toISOString(),
+        },
         createdAt: new Date().toISOString(),
         published: true,
       };
 
-      // Notify backend idempotency endpoint
-      try {
-        await fetch('/api/beats/publish', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idempotencyKey, beatData: newBeat })
-        }).catch(() => {});
-      } catch (e) {}
-
-      const createdBeat = addBeat(newBeat);
+      const createdBeat = await addBeat(newBeat);
       createdBeatResultRef.current = createdBeat;
       setIsPublishSuccess(true);
       setIsSubmitting(false);
@@ -352,12 +373,21 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     isSubmittingRef.current = false;
     currentSubmissionIdRef.current = null;
     createdBeatResultRef.current = null;
+    activeBeatIdRef.current = `beat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     setIsSubmitting(false);
     setIsPublishSuccess(false);
     setSubmissionError(null);
     setFormData(prev => ({
       ...prev,
-      title: 'NEW BEAT ' + Math.floor(Math.random() * 1000)
+      title: 'NEW BEAT ' + Math.floor(Math.random() * 1000),
+      audioUrl: '',
+      audioFileName: '',
+      artworkUrl: '',
+      coverArtName: 'Default Cover.jpg',
+      stemsUrl: '',
+      stemZipFileName: '',
+      archiveVaultUrl: '',
+      archiveItemId: ''
     }));
     setActiveSection(1);
   };
@@ -459,7 +489,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <Music size={18} className="text-purple-400" />
                 <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Audio Uploads</h3>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">R2 CDN & Archive Synced</span>
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Internet Archive Vault Synced</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -477,25 +507,39 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
 
                 <div className="relative h-28 border-2 border-dashed border-white/20 hover:border-white transition-all flex flex-col items-center justify-center p-4 text-center">
                   <span className="text-xs font-black uppercase tracking-wider text-white truncate max-w-full">
-                    {formData.audioFileName}
+                    {formData.audioFileName || 'No File Selected'}
                   </span>
                   <span className="text-[9px] font-mono text-emerald-400 mt-1 uppercase">
-                    {formData.audioUrl ? '✓ Cloudflare R2 Active' : 'Tap To Select File'}
+                    {isUploadingAudio ? '⏳ Uploading to Internet Archive...' : formData.audioUrl ? '✓ Internet Archive Vault Active' : 'Tap To Select MP3 or M4A (WAV Prohibited)'}
                   </span>
                   <input 
                     type="file" 
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    accept=".mp3,.m4a"
+                    className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    accept=".mp3,.m4a,audio/mpeg,audio/mp4"
+                    disabled={isUploadingAudio}
                     onChange={async (e) => {
                       if (e.target.files?.[0]) {
                         const file = e.target.files[0];
-                        const res = await uploadToR2AndArchive(file, 'audio');
-                        setFormData((prev) => ({ 
-                          ...prev, 
-                          audioFileName: file.name, 
-                          audioUrl: res.cdnUrl,
-                          archiveVaultUrl: res.archiveUrl 
-                        }));
+                        try {
+                          validateAudioFile(file);
+                          setIsUploadingAudio(true);
+                          const res = await uploadToStorage(file, 'audio', activeBeatIdRef.current, {
+                            title: formData.title,
+                            producer: formData.producerId,
+                            existingItemId: formData.archiveItemId,
+                          });
+                          setFormData((prev) => ({ 
+                            ...prev, 
+                            audioFileName: file.name, 
+                            audioUrl: res.cdnUrl,
+                            archiveVaultUrl: res.cdnUrl,
+                            archiveItemId: res.itemId || prev.archiveItemId
+                          }));
+                        } catch (err: any) {
+                          alert(err?.message || 'Audio upload failed');
+                        } finally {
+                          setIsUploadingAudio(false);
+                        }
                       }
                     }}
                   />
@@ -522,16 +566,27 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   <input 
                     type="file" 
                     className="absolute inset-0 opacity-0 cursor-pointer"
-                    accept="audio/*"
+                    accept=".mp3,.m4a,audio/mpeg,audio/mp4"
                     onChange={async (e) => {
                       if (e.target.files?.[0]) {
                         const file = e.target.files[0];
-                        const res = await uploadToR2AndArchive(file, 'audio');
-                        setFormData((prev) => ({ 
-                          ...prev, 
-                          isPreTaggedUpload: true,
-                          audioUrl: res.cdnUrl 
-                        }));
+                        try {
+                          validateAudioFile(file);
+                          const res = await uploadToStorage(file, 'audio', activeBeatIdRef.current, {
+                            title: formData.title,
+                            producer: formData.producerId,
+                            existingItemId: formData.archiveItemId,
+                          });
+                          setFormData((prev) => ({ 
+                            ...prev, 
+                            isPreTaggedUpload: true,
+                            audioUrl: res.cdnUrl,
+                            archiveVaultUrl: res.cdnUrl,
+                            archiveItemId: res.itemId || prev.archiveItemId
+                          }));
+                        } catch (err: any) {
+                          alert(err?.message || 'Audio upload failed');
+                        }
                       }
                     }}
                   />
@@ -566,21 +621,34 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   {formData.stemZipFileName}
                 </span>
                 <span className="text-[9px] font-mono text-emerald-400 mt-1 uppercase">
-                  {formData.stemsUrl ? '✓ Stems Archive Uploaded' : 'Select .ZIP File'}
+                  {isUploadingStems ? '⏳ Uploading to Internet Archive...' : formData.stemsUrl ? '✓ Internet Archive Stems Vault Active' : 'Select .ZIP File'}
                 </span>
                 <input 
                   type="file" 
-                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   accept=".zip,.rar,.7z"
+                  disabled={isUploadingStems}
                   onChange={async (e) => {
                     if (e.target.files?.[0]) {
                       const file = e.target.files[0];
-                      const res = await uploadToR2AndArchive(file, 'stems');
-                      setFormData((prev) => ({ 
-                        ...prev, 
-                        stemZipFileName: file.name, 
-                        stemsUrl: res.cdnUrl 
-                      }));
+                      setIsUploadingStems(true);
+                      try {
+                        const res = await uploadToStorage(file, 'stems', activeBeatIdRef.current, {
+                          title: formData.title,
+                          producer: formData.producerId,
+                          existingItemId: formData.archiveItemId,
+                        });
+                        setFormData((prev) => ({ 
+                          ...prev, 
+                          stemZipFileName: file.name, 
+                          stemsUrl: res.cdnUrl,
+                          archiveItemId: res.itemId || prev.archiveItemId
+                        }));
+                      } catch (err: any) {
+                        alert(err?.message || 'Stems upload failed');
+                      } finally {
+                        setIsUploadingStems(false);
+                      }
                     }
                   }}
                 />
@@ -624,20 +692,33 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
 
                 <div className="flex flex-wrap gap-4 pt-2">
                   <label className="px-6 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-neutral-200 transition-colors">
-                    Upload New Artwork
+                    {isUploadingArtwork ? 'Uploading to Internet Archive...' : 'Upload New Artwork'}
                     <input 
                       type="file" 
                       className="hidden" 
                       accept="image/*"
+                      disabled={isUploadingArtwork}
                       onChange={async (e) => {
                         if (e.target.files?.[0]) {
                           const file = e.target.files[0];
-                          const res = await uploadToR2AndArchive(file, 'artwork');
-                          setFormData((prev) => ({ 
-                            ...prev, 
-                            coverArtName: file.name, 
-                            artworkUrl: res.cdnUrl 
-                          }));
+                          setIsUploadingArtwork(true);
+                          try {
+                            const res = await uploadToStorage(file, 'artwork', activeBeatIdRef.current, {
+                              title: formData.title,
+                              producer: formData.producerId,
+                              existingItemId: formData.archiveItemId,
+                            });
+                            setFormData((prev) => ({ 
+                              ...prev, 
+                              coverArtName: file.name, 
+                              artworkUrl: res.cdnUrl,
+                              archiveItemId: res.itemId || prev.archiveItemId
+                            }));
+                          } catch (err: any) {
+                            alert(err?.message || 'Artwork upload failed');
+                          } finally {
+                            setIsUploadingArtwork(false);
+                          }
                         }
                       }}
                     />
@@ -1248,7 +1329,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="space-y-1">
               <h4 className="text-xl font-black uppercase text-white">Publish Live To Catalog</h4>
               <p className="text-xs text-white/40 uppercase tracking-wider">
-                Pushes track live to Cloudflare R2 Edge CDN & Internet Archive Vault.
+                Pushes track live to Cloudflare Pages & Internet Archive Vault.
               </p>
             </div>
 

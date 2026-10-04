@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Shield, AlertTriangle, CheckCircle, Smartphone } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bell, Shield, Smartphone } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { auth } from '../../lib/firebase';
 
 export const NotificationSettings = () => {
   const [enabled, setEnabled] = useState(false);
-  const [adminSecret, setAdminSecret] = useState(localStorage.getItem('kraezelv_admin_secret') || '');
-
-  const saveSecret = (val: string) => {
-    setAdminSecret(val);
-    localStorage.setItem('kraezelv_admin_secret', val);
-  };
 
   const [settings, setSettings] = useState({
     newSale: true,
@@ -45,10 +40,24 @@ export const NotificationSettings = () => {
           applicationServerKey: vapidPublicKey
         });
 
+        const subscriptionPayload = subscription && typeof subscription.toJSON === 'function'
+          ? subscription.toJSON()
+          : subscription;
+
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (auth.currentUser) {
+          try {
+            const idToken = await auth.currentUser.getIdToken();
+            if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+          } catch {
+            // Non-blocking
+          }
+        }
+
         await fetch('/api/notifications/subscribe', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscription, adminSecret })
+          headers,
+          body: JSON.stringify({ subscription: subscriptionPayload })
         });
       } catch (err) {
         console.error('[NOTIFICATIONS] Subscription failed:', err);
@@ -93,18 +102,14 @@ export const NotificationSettings = () => {
         ))}
       </div>
 
-      <div className="p-6 bg-neutral-900 border border-white/5 space-y-4">
+      <div className="p-6 bg-neutral-900 border border-white/5 space-y-2">
          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Owner Admin Secret</label>
-            <Shield size={12} className="text-white/20" />
+            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Producer Identity Session</label>
+            <Shield size={12} className="text-emerald-400" />
          </div>
-         <input 
-           type="password"
-           value={adminSecret}
-           onChange={(e) => saveSecret(e.target.value)}
-           placeholder="ENTER SECRET TO AUTHORIZE PUSH..."
-           className="w-full bg-black border border-white/10 p-4 text-xs font-mono text-white outline-none focus:border-purple-500"
-         />
+         <p className="text-xs font-mono text-white/70">
+           {auth.currentUser ? `Signed In: ${auth.currentUser.email || auth.currentUser.uid}` : 'Producer Session: Active'}
+         </p>
       </div>
 
       <button onClick={sendTestNotification} className="w-full py-6 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all flex items-center justify-center gap-2">

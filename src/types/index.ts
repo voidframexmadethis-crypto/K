@@ -64,6 +64,23 @@ export interface Beat {
   playsCount?: number;
   createdAt: string;
   published: boolean;
+  storage?: BeatStorageMetadata;
+}
+
+export interface BeatStorageMetadata {
+  provider: 'internet_archive';
+  itemId: string;
+  audioUrl?: string;
+  artworkUrl?: string;
+  stemsUrl?: string;
+  uploadedAt: string;
+  files?: {
+    category: 'audio' | 'artwork' | 'stems';
+    fileName: string;
+    durableUrl: string;
+    size: number;
+    mimeType: string;
+  }[];
 }
 
 export interface Producer {
