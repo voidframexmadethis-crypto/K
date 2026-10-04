@@ -4,11 +4,13 @@ import { useAudioStore } from '../store/useAudioStore';
 import { useBeatCatalogStore } from '../store/useBeatCatalogStore';
 import { Link } from 'react-router-dom';
 import { LicensingModal } from '../components/beats/LicensingModal';
+import { FreeDownloadModal } from '../components/beats/FreeDownloadModal';
 
 export const AudioPlayerPage = () => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const { beats } = useBeatCatalogStore();
   const [isLicensingOpen, setIsLicensingOpen] = useState(false);
+  const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
 
   const activeBeat = currentBeat || (beats.length > 0 ? beats[0] : null);
   const isCurrent = activeBeat && currentBeat?.id === activeBeat.id && isPlaying;
@@ -60,7 +62,10 @@ export const AudioPlayerPage = () => {
                   <ShoppingCart size={14} /> ${activeBeat.licenses.basic.price.toFixed(2)}
                 </button>
                 {activeBeat.isFree && (
-                  <button className="px-6 py-3 bg-black border border-white/20 text-white font-bold uppercase tracking-widest text-[10px] flex items-center gap-2 hover:bg-white hover:text-black transition-all">
+                  <button 
+                    onClick={() => setIsFreeModalOpen(true)}
+                    className="px-6 py-3 bg-black border border-white/20 text-white font-bold uppercase tracking-widest text-[10px] flex items-center gap-2 hover:bg-white hover:text-black transition-all"
+                  >
                     <Download size={14} /> Free Download
                   </button>
                 )}
@@ -72,6 +77,12 @@ export const AudioPlayerPage = () => {
             beat={activeBeat}
             isOpen={isLicensingOpen}
             onClose={() => setIsLicensingOpen(false)}
+          />
+
+          <FreeDownloadModal 
+            beat={activeBeat}
+            isOpen={isFreeModalOpen}
+            onClose={() => setIsFreeModalOpen(false)}
           />
 
           {/* Catalog List */}

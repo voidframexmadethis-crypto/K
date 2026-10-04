@@ -112,8 +112,10 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
         <div className="p-8 overflow-y-auto no-scrollbar grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Options Grid */}
           <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {tiers.map(tier => {
-              const isSelected = selectedTier === tier.id;
+            {tiers
+              .filter(tier => beat.licenses[tier.id].enabled)
+              .map(tier => {
+                const isSelected = selectedTier === tier.id;
               return (
                 <div 
                   key={tier.id}

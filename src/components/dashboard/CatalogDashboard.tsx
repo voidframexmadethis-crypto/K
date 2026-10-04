@@ -52,12 +52,12 @@ export const CatalogDashboard = () => {
                  </button>
               ))}
            </div>
-           <button className="px-8 py-4 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all flex items-center gap-3">
+           <button onClick={() => alert('Bulk Uploader: Module initializing...')} className="px-8 py-4 border border-white/10 text-white font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all flex items-center gap-3">
               <Layers size={14} /> Bulk Uploader
            </button>
-           <button className="px-8 py-4 bg-white text-black font-black uppercase tracking-widest text-[10px] hover:bg-neutral-200 transition-all flex items-center gap-3">
+           <Link to="/dashboard/upload" className="px-8 py-4 bg-white text-black font-black uppercase tracking-widest text-[10px] hover:bg-neutral-200 transition-all flex items-center gap-3">
               <Plus size={14} /> Add Single Beat
-           </button>
+           </Link>
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export const CatalogDashboard = () => {
                            <td className="p-6">
                               <div className="flex items-center justify-center gap-2">
                                  <div title="Tagged MP3" className={cn("w-6 h-6 border flex items-center justify-center text-[8px]", beat.audioUrl ? "border-emerald-500/20 text-emerald-500 bg-emerald-500/5" : "border-white/5 text-white/10")}>MP3</div>
-                                 <div title="Untagged WAV" className={cn("w-6 h-6 border flex items-center justify-center text-[8px]", beat.audioUrl ? "border-emerald-500/20 text-emerald-500 bg-emerald-500/5" : "border-white/5 text-white/10")}>WAV</div>
+                                 <div title="Untagged M4A" className={cn("w-6 h-6 border flex items-center justify-center text-[8px]", beat.audioUrl ? "border-emerald-500/20 text-emerald-500 bg-emerald-500/5" : "border-white/5 text-white/10")}>M4A</div>
                                  <div title="Track Stems" className={cn("w-6 h-6 border flex items-center justify-center text-[8px]", beat.stemsUrl ? "border-emerald-500/20 text-emerald-500 bg-emerald-500/5" : "border-white/5 text-white/10")}>ZIP</div>
                               </div>
                            </td>
@@ -146,8 +146,8 @@ export const CatalogDashboard = () => {
                            </td>
                            <td className="p-6 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                 <button className="p-3 text-white/20 hover:text-white transition-colors"><Edit3 size={14} /></button>
-                                 <button className="p-3 text-white/20 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                                 <button onClick={() => alert('Edit feature coming soon. Use the Add Beat portal to update tracks.')} className="p-3 text-white/20 hover:text-white transition-colors"><Edit3 size={14} /></button>
+                                 <button onClick={() => { if(confirm(`Archive ${beat.title}?`)) removeBeat(beat.id); }} className="p-3 text-white/20 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                               </div>
                            </td>
                         </tr>

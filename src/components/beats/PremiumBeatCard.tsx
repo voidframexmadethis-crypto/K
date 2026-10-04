@@ -23,6 +23,14 @@ export const PremiumBeatCard = ({ beat, variant = 'default' }: { beat: Beat, var
     if (isEmailRequired) {
       setIsFreeModalOpen(true);
     } else {
+      import('../../services/analyticsService').then(({ logAnalyticsEvent }) => {
+        logAnalyticsEvent({
+          eventType: 'free_download',
+          beatId: beat.id,
+          beatTitle: beat.title
+        });
+      }).catch(() => {});
+
       const downloadLink = document.createElement('a');
       downloadLink.href = beat.audioUrl || '#';
       downloadLink.download = `${beat.title}_Free.mp3`;

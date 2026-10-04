@@ -13,9 +13,20 @@ import { ProducerFeature } from '../components/ProducerFeature';
 import { Music, ArrowRight, Download, Sparkles, Layers, Upload } from 'lucide-react';
 import { useBeatCatalogStore } from '../store/useBeatCatalogStore';
 import { AdOverlay } from '../components/home/AdOverlay';
+import { FreeDownloadModal } from '../components/beats/FreeDownloadModal';
 
 export const HomePage = () => {
   const { beats } = useBeatCatalogStore();
+  const [deepLinkBeat, setDeepLinkBeat] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      setDeepLinkBeat(e.detail.beat);
+    };
+    window.addEventListener('open-free-download-modal', handler);
+    return () => window.removeEventListener('open-free-download-modal', handler);
+  }, []);
+
   const freeBeats = beats.filter(b => b.isFree);
 
   // When there are zero real published beats, the storefront content area must be completely empty.
@@ -120,6 +131,11 @@ export const HomePage = () => {
       {/* 12. PRODUCER PROFILE & BIO */}
       <ProducerFeature />
       <AdOverlay />
+      <FreeDownloadModal 
+        beat={deepLinkBeat}
+        isOpen={!!deepLinkBeat}
+        onClose={() => setDeepLinkBeat(null)}
+      />
 
       {/* 13. FOOTER CTA */}
       <section className="py-32 flex flex-col items-center text-center px-6 border-t border-white/10 bg-neutral-950">

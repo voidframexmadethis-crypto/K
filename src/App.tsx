@@ -33,7 +33,7 @@ import { AudioPlayerPage } from './pages/AudioPlayerPage';
 import { ServicesPage } from './pages/ServicesPage';
 import { useBeatDeepLink } from './lib/useBeatDeepLink';
 import { logAnalyticsEvent } from './services/analyticsService';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { cn } from './lib/utils';
 
@@ -139,6 +139,19 @@ const DashboardPlaceholder = ({ title }: { title: string }) => (
   </div>
 );
 
+const LogoutHandler = () => {
+  useEffect(() => {
+    signOut(auth).then(() => {
+      window.location.href = '/';
+    });
+  }, []);
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="text-white text-xs font-black uppercase tracking-[0.5em] animate-pulse">Signing Out...</div>
+    </div>
+  );
+};
+
 function MainAppContent() {
   const location = useLocation();
   useBeatDeepLink();
@@ -188,6 +201,7 @@ function MainAppContent() {
         <Route path="/producer/*" element={<ProducerProfilePage />} />
         <Route path="/audio-player" element={<AudioPlayerPage />} />
         <Route path="/account" element={<CustomerLibrary />} />
+        <Route path="/logout" element={<LogoutHandler />} />
         <Route 
           path="/dashboard/*" 
           element={

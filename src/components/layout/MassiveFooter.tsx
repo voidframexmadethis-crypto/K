@@ -42,16 +42,16 @@ export const MassiveFooter = () => {
                   { name: 'Collections', href: '/collections' },
                   { name: 'Beat Packs', href: '/packs' },
                   { name: 'Free Downloads', href: '/free-beats' },
-                  { name: 'Exclusive Inquiry', href: '#' }
+                  { name: 'Exclusive Inquiry', href: 'mailto:kraezelv@gmail.com' }
                 ] 
               },
               { 
                 title: 'Department', 
                 links: [
                   { name: 'Apparel & Merch', href: '/merch' },
-                  { name: 'Sound Kits', href: '#' },
+                  { name: 'Sound Kits', href: '/packs' },
                   { name: 'Mixing Services', href: '/services' },
-                  { name: 'Studio Rental', href: '#' },
+                  { name: 'Studio Rental', href: 'mailto:kraezelv@gmail.com' },
                   { name: 'UGC Content Lab', href: '/dashboard/content' }
                 ] 
               },
@@ -62,16 +62,16 @@ export const MassiveFooter = () => {
                   { name: 'Download Library', href: '/account' },
                   { name: 'Saved Favorites', href: '/favorites' },
                   { name: 'Shopping Cart', href: '/cart' },
-                  { name: 'Support Tickets', href: '#' }
+                  { name: 'Support Tickets', href: 'mailto:kraezelv@gmail.com' }
                 ] 
               },
               { 
                 title: 'Contact', 
                 links: [
                   { name: 'kraezelv@gmail.com', href: 'mailto:kraezelv@gmail.com' },
-                  { name: '+1 (555) 000-000', href: '#' },
-                  { name: 'Discord Server', href: '#' },
-                  { name: 'Support Tickets', href: '#' }
+                  { name: '+1 (555) 000-000', href: 'tel:+1555000000' },
+                  { name: 'Discord Server', href: 'https://discord.gg/kraezelv' },
+                  { name: 'Support Tickets', href: 'mailto:kraezelv@gmail.com' }
                 ] 
               }
             ].map((section) => (

@@ -57,7 +57,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     typeBeatArtist: 'Drake x Future',
     description: 'Dark atmospheric trap instrumental with heavy sliding 808s and brass stabs.',
     durationMs: 204580,
-    audioFileName: 'Valkyrie_Master_24bit.wav',
+    audioFileName: 'Valkyrie_Master_HighRes.mp3',
     coverArtName: 'Valkyrie_Artwork_3000x3000.jpg',
     stemZipFileName: 'Valkyrie_WAV_Stems_Bundle.zip',
     lyrics: '[Intro]\nYeah, KRAEZELV on the track...\n[Chorus]\nSliding through the dark...',
@@ -119,7 +119,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     previewPassword: '',
 
     // 6. Advanced Transcoding & Engine
-    audioFormatCodec: '24-bit PCM WAV',
+    audioFormatCodec: '320kbps MP3 / M4A',
     bitDepth: '24-bit / 32-bit Float',
     sampleRate: '44.1 kHz',
     mp3BitrateCap: '320kbps',
@@ -468,7 +468,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Untagged Master</span>
-                    <h4 className="text-lg font-black text-white uppercase">WAV / High-Res MP3</h4>
+                    <h4 className="text-lg font-black text-white uppercase">MP3 / M4A Master</h4>
                   </div>
                   <FileAudio size={24} className="text-white/40" />
                 </div>

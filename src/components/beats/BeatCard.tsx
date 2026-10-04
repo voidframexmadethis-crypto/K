@@ -25,6 +25,14 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
       setIsFreeModalOpen(true);
     } else {
       // Direct instant download without email
+      import('../../services/analyticsService').then(({ logAnalyticsEvent }) => {
+        logAnalyticsEvent({
+          eventType: 'free_download',
+          beatId: beat.id,
+          beatTitle: beat.title
+        });
+      }).catch(() => {});
+
       const downloadLink = document.createElement('a');
       downloadLink.href = beat.audioUrl || '#';
       downloadLink.download = `${beat.title}_Free.mp3`;
