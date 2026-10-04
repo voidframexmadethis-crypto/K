@@ -21,59 +21,127 @@ import {
   Link as LinkIcon,
   Music2,
   Tv,
-  Cpu
+  Camera
 } from 'lucide-react';
 import { uploadToR2AndArchive } from '../../lib/storageEngine';
 
 export const ProfileSettings = () => {
   // State for Producer Profile Settings
-  const [profile, setProfile] = useState({
-    displayName: 'KRAEZELVbeatz',
-    username: 'kraezelv',
-    location: 'Atlanta, GA / Global',
-    primaryGenre: 'Dark Trap / UK Drill',
-    bio: 'Multi-platinum certified trap & drill producer. Crafting dark, cinematic instrumentals for artists worldwide.',
-    avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=400&auto=format&fit=crop&q=80',
-    bannerUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1600&auto=format&fit=crop&q=80',
-    avatarFileName: 'kraezelv_avatar.jpg',
-    bannerFileName: 'kraezelv_banner_3000x1080.jpg',
-
-    // Social Media Links
-    socials: {
-      youtube: 'https://youtube.com/@kraezelvbeatz',
-      instagram: 'https://instagram.com/kraezelvbeatz',
-      twitter: 'https://x.com/kraezelvbeatz',
-      tiktok: 'https://tiktok.com/@kraezelvbeatz',
-      spotify: 'https://open.spotify.com/artist/kraezelv',
-      soundcloud: 'https://soundcloud.com/kraezelvbeatz',
-      discord: 'https://discord.gg/kraezelv',
-      appleMusic: 'https://music.apple.com/artist/kraezelv'
-    },
-
-    // TubeBuddy Integration
-    tubeBuddy: {
-      apiKey: 'tb_live_981273912x_kraezelv',
-      channelId: 'UC_kraezelv_official_channel',
-      isConnected: true,
-      tagScore: '98/100 (Excellent YouTube SEO)',
-      lastSynced: 'Just Now'
-    },
-
-    // vidIQ Integration
-    vidIQ: {
-      apiKey: 'vidiq_auth_887123912_live',
-      accountId: 'vidiq_acc_kraezelv',
-      isConnected: true,
-      keywordScore: '94/100 (High Search Volume)',
-      lastSynced: 'Just Now'
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem('kraezelv_producer_profile');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to parse saved profile', e);
+      }
     }
+    return {
+      displayName: 'KRAEZELVbeatz',
+      username: 'kraezelv',
+      location: 'Atlanta, GA / Global',
+      primaryGenre: 'Dark Trap / UK Drill',
+      bio: 'Multi-platinum certified trap & drill producer. Crafting dark, cinematic instrumentals for artists worldwide.',
+      avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=400&auto=format&fit=crop&q=80',
+      bannerUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1600&auto=format&fit=crop&q=80',
+      avatarFileName: 'kraezelv_avatar.jpg',
+      bannerFileName: 'kraezelv_banner_3000x1080.jpg',
+
+      // Social Media Links
+      socials: {
+        youtube: 'https://youtube.com/@kraezelvbeatz',
+        instagram: 'https://instagram.com/kraezelvbeatz',
+        twitter: 'https://x.com/kraezelvbeatz',
+        tiktok: 'https://tiktok.com/@kraezelvbeatz',
+        spotify: 'https://open.spotify.com/artist/kraezelv',
+        soundcloud: 'https://soundcloud.com/kraezelvbeatz',
+        discord: 'https://discord.gg/kraezelv',
+        appleMusic: 'https://music.apple.com/artist/kraezelv'
+      },
+
+      // TubeBuddy Integration
+      tubeBuddy: {
+        apiKey: 'tb_live_981273912x_kraezelv',
+        channelId: 'UC_kraezelv_official_channel',
+        isConnected: true,
+        tagScore: '98/100 (Excellent YouTube SEO)',
+        lastSynced: 'Just Now'
+      },
+
+      // vidIQ Integration
+      vidIQ: {
+        apiKey: 'vidiq_auth_887123912_live',
+        accountId: 'vidiq_acc_kraezelv',
+        isConnected: true,
+        keywordScore: '94/100 (High Search Volume)',
+        lastSynced: 'Just Now'
+      }
+    };
   });
 
   const [savedAlert, setSavedAlert] = useState(false);
   const [testingTubeBuddy, setTestingTubeBuddy] = useState(false);
   const [testingVidIQ, setTestingVidIQ] = useState(false);
 
-  // Handle Save
+  // Device Banner Image File Upload Handler
+  const handleBannerFileSelect = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setProfile(prev => {
+        const updated = {
+          ...prev,
+          bannerUrl: dataUrl,
+          bannerFileName: file.name
+        };
+        localStorage.setItem('kraezelv_producer_profile', JSON.stringify(updated));
+        return updated;
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Async R2 cloud backup
+    uploadToR2AndArchive(file, 'artwork').then(res => {
+      if (res?.cdnUrl) {
+        setProfile(prev => {
+          const updated = { ...prev, bannerUrl: res.cdnUrl };
+          localStorage.setItem('kraezelv_producer_profile', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }).catch(() => {});
+  };
+
+  // Device Avatar Image File Upload Handler
+  const handleAvatarFileSelect = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setProfile(prev => {
+        const updated = {
+          ...prev,
+          avatarUrl: dataUrl,
+          avatarFileName: file.name
+        };
+        localStorage.setItem('kraezelv_producer_profile', JSON.stringify(updated));
+        return updated;
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Async R2 cloud backup
+    uploadToR2AndArchive(file, 'artwork').then(res => {
+      if (res?.cdnUrl) {
+        setProfile(prev => {
+          const updated = { ...prev, avatarUrl: res.cdnUrl };
+          localStorage.setItem('kraezelv_producer_profile', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }).catch(() => {});
+  };
+
+  // Save All Settings
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('kraezelv_producer_profile', JSON.stringify(profile));
@@ -124,11 +192,11 @@ export const ProfileSettings = () => {
           <div className="flex items-center gap-3 mb-2">
             <User className="text-purple-400" size={28} />
             <h2 className="text-3xl font-black uppercase tracking-tighter text-white">
-              Producer Profile & SEO Settings
+              Producer Profile & Device Photo Upload
             </h2>
           </div>
           <p className="text-white/50 text-xs uppercase tracking-wider">
-            Manage your storefront banner, profile avatar, bio, social links, TubeBuddy & vidIQ video SEO integrations.
+            Upload custom photos from your phone, laptop or PC for your Profile Picture and Storefront Banner.
           </p>
         </div>
 
@@ -143,25 +211,30 @@ export const ProfileSettings = () => {
       {savedAlert && (
         <div className="p-4 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-widest flex items-center gap-3 rounded-sm shadow-xl animate-in fade-in">
           <CheckCircle2 size={18} />
-          Profile Settings, Banner, Social Links & TubeBuddy / vidIQ Configurations Saved Successfully!
+          Profile Photos, Bio, Social Links & SEO Settings Saved Successfully!
         </div>
       )}
 
-      {/* 1. PROFILE BANNER & AVATAR UPLOADER */}
+      {/* 1. DEVICE PHOTO UPLOADER: BANNER & AVATAR */}
       <div className="p-8 bg-neutral-950 border border-white/10 rounded-sm space-y-8">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
-            <ImageIcon size={18} className="text-purple-400" />
+            <Camera size={20} className="text-purple-400" />
             <h3 className="text-2xl font-black uppercase text-white tracking-tight">
-              1. Profile Banner & Avatar
+              1. Custom Photos Upload (From Your Device)
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest">Storefront Branding</span>
+          <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Supports JPG, PNG, WEBP</span>
         </div>
 
-        {/* Live Banner Preview */}
+        {/* Live Banner Preview & Upload Trigger */}
         <div className="space-y-4">
-          <div className="relative h-48 sm:h-64 w-full bg-neutral-900 border border-white/15 rounded-sm overflow-hidden group">
+          <div className="flex justify-between items-center">
+            <label className="text-xs font-black uppercase tracking-wider text-white/80">Storefront Banner Photo (Wide 1920x1080)</label>
+            <span className="text-[9px] font-mono text-white/40">{profile.bannerFileName}</span>
+          </div>
+
+          <div className="relative h-52 sm:h-72 w-full bg-neutral-900 border-2 border-dashed border-white/20 hover:border-purple-500 rounded-sm overflow-hidden group transition-colors">
             <img 
               src={profile.bannerUrl} 
               alt="Profile Banner" 
@@ -169,58 +242,90 @@ export const ProfileSettings = () => {
             />
             
             {/* Banner Overlay Controls */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 p-4 text-center">
+              <Upload size={32} className="text-purple-400 animate-bounce" />
+              <p className="text-xs font-bold text-white uppercase tracking-wider">Select New Banner Image From Device</p>
+              
               <label className="px-6 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-neutral-200 transition-colors shadow-2xl flex items-center gap-2">
-                <Upload size={14} /> Upload New Banner (1920x1080)
+                <Camera size={14} /> Browse Photos On Device
                 <input 
                   type="file" 
                   className="hidden" 
                   accept="image/*"
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     if (e.target.files?.[0]) {
-                      const file = e.target.files[0];
-                      const res = await uploadToR2AndArchive(file, 'artwork');
-                      setProfile(prev => ({
-                        ...prev,
-                        bannerUrl: res.cdnUrl,
-                        bannerFileName: file.name
-                      }));
+                      handleBannerFileSelect(e.target.files[0]);
                     }
                   }}
                 />
               </label>
-              <span className="text-[9px] text-white/70 font-mono">{profile.bannerFileName}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <label className="px-5 py-2.5 bg-white/10 hover:bg-white hover:text-black border border-white/20 text-white text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-2">
+              <Upload size={14} /> Upload Banner File From Device
+              <input 
+                type="file" 
+                className="hidden" 
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    handleBannerFileSelect(e.target.files[0]);
+                  }
+                }}
+              />
+            </label>
+            <span className="text-[9px] font-mono text-white/40">PNG, JPG, GIF or WEBP up to 25MB</span>
+          </div>
+        </div>
+
+        {/* Live Avatar Preview & Upload Trigger */}
+        <div className="space-y-4 pt-6 border-t border-white/10">
+          <label className="text-xs font-black uppercase tracking-wider text-white/80 block">Profile Picture / Avatar Photo (1:1 Ratio)</label>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <div className="relative w-32 h-32 rounded-sm bg-black border-2 border-purple-500 overflow-hidden shadow-2xl group/avatar shrink-0">
+              <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              
+              <label className="absolute inset-0 bg-black/75 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer text-[9px] font-black uppercase text-white tracking-widest text-center p-2 gap-1">
+                <Camera size={18} className="text-purple-400" />
+                Change Photo
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      handleAvatarFileSelect(e.target.files[0]);
+                    }
+                  }}
+                />
+              </label>
             </div>
 
-            {/* Profile Avatar Overlay Positioned on Banner */}
-            <div className="absolute bottom-4 left-6 flex items-end gap-4">
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-sm bg-black border-2 border-white overflow-hidden shadow-2xl group/avatar">
-                <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                <label className="absolute inset-0 bg-black/60 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center cursor-pointer text-[9px] font-black uppercase text-white tracking-widest text-center p-1">
-                  Change
+            <div className="space-y-3 flex-1">
+              <div className="space-y-1">
+                <h4 className="text-lg font-black uppercase text-white">{profile.displayName}</h4>
+                <p className="text-xs font-bold text-purple-400 uppercase">@{profile.username}</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-2 shadow-lg">
+                  <Upload size={14} /> Upload Profile Picture From Device
                   <input 
                     type="file" 
                     className="hidden" 
                     accept="image/*"
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       if (e.target.files?.[0]) {
-                        const file = e.target.files[0];
-                        const res = await uploadToR2AndArchive(file, 'artwork');
-                        setProfile(prev => ({
-                          ...prev,
-                          avatarUrl: res.cdnUrl,
-                          avatarFileName: file.name
-                        }));
+                        handleAvatarFileSelect(e.target.files[0]);
                       }
                     }}
                   />
                 </label>
               </div>
-
-              <div className="mb-2">
-                <h4 className="text-xl font-black uppercase text-white drop-shadow-md">{profile.displayName}</h4>
-                <p className="text-xs text-purple-400 font-bold uppercase tracking-wider">@{profile.username}</p>
-              </div>
+              <p className="text-[9px] font-mono text-white/40">Recommended square size: 500x500 pixels.</p>
             </div>
           </div>
         </div>
@@ -524,7 +629,7 @@ export const ProfileSettings = () => {
       <div className="p-6 bg-neutral-950 border border-white/15 rounded-sm flex flex-col sm:flex-row items-center justify-between gap-6 shadow-2xl">
         <div className="space-y-1">
           <h4 className="text-lg font-black uppercase text-white">Save All Profile & Integration Changes</h4>
-          <p className="text-xs text-white/40 uppercase">Applies banner, avatar, social media links, TubeBuddy & vidIQ configurations across your store.</p>
+          <p className="text-xs text-white/40 uppercase">Applies custom device photos, banner, avatar, social media links, TubeBuddy & vidIQ configurations across your store.</p>
         </div>
 
         <button

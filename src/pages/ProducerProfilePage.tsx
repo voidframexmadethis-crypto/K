@@ -72,6 +72,22 @@ export const ProducerProfilePage = () => {
 
   const genres = ['ALL', 'DARK TRAP', 'UK DRILL', 'HYPERPOP', 'R&B'];
 
+  useEffect(() => {
+    const syncProfile = () => {
+      const saved = localStorage.getItem('kraezelv_producer_profile');
+      if (saved) {
+        try {
+          setProfile(JSON.parse(saved));
+        } catch (e) {
+          console.warn('Failed to parse updated profile', e);
+        }
+      }
+    };
+    syncProfile();
+    window.addEventListener('storage', syncProfile);
+    return () => window.removeEventListener('storage', syncProfile);
+  }, []);
+
   return (
     <div className="min-h-screen bg-black text-white pt-20 pb-32">
       
