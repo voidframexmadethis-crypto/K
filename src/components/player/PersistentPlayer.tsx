@@ -7,6 +7,7 @@ import {
 import { useAudioStore } from '../../store/useAudioStore';
 import { LicensingModal } from '../beats/LicensingModal';
 import { BeatShareModal } from './BeatShareModal';
+import { SpotifyMasteringStudioModal } from './SpotifyMasteringStudioModal';
 import { hiFiAudioEngine, MASTER_PRESETS, MasterPresetId } from '../../lib/hiFiAudioEngine';
 import { cn } from '../../lib/utils';
 
@@ -21,8 +22,9 @@ export const PersistentPlayer = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isLicenseOpen, setIsLicenseOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isMasteringStudioOpen, setIsMasteringStudioOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('studio_master');
+  const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('spotify_master_14lufs');
   const [showDspMenu, setShowDspMenu] = useState(false);
 
   useEffect(() => {
@@ -170,7 +172,7 @@ export const PersistentPlayer = () => {
               </div>
 
               {/* Master Audio DSP Badge */}
-              <div className="relative">
+              <div className="relative flex items-center gap-1.5">
                 <button
                   onClick={() => setShowDspMenu(!showDspMenu)}
                   className="px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-emerald-500/20 border border-purple-500/30 text-purple-300 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 hover:border-purple-400 transition-all rounded-sm mt-0.5"
@@ -179,11 +181,26 @@ export const PersistentPlayer = () => {
                   {currentDspObject.badge}
                 </button>
 
+                <button
+                  onClick={() => setIsMasteringStudioOpen(true)}
+                  className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 hover:bg-emerald-500/30 transition-all rounded-sm mt-0.5"
+                  title="Open Spotify -14 LUFS Mastering Studio"
+                >
+                  <Sliders size={10} className="text-emerald-400" />
+                  Spotify Studio
+                </button>
+
                 {/* DSP Presets Selector Menu */}
                 {showDspMenu && (
                   <div className="absolute left-0 bottom-full mb-2 w-72 bg-neutral-950 border border-white/20 p-3 shadow-2xl z-[220] flex flex-col gap-2">
-                    <div className="text-[9px] font-black uppercase tracking-widest text-purple-400 border-b border-white/10 pb-2">
-                      Hi-Fi Audio DSP Processing Engine
+                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-purple-400 border-b border-white/10 pb-2">
+                      <span>Hi-Fi Audio DSP Processing Engine</span>
+                      <button 
+                        onClick={() => { setShowDspMenu(false); setIsMasteringStudioOpen(true); }}
+                        className="text-[8px] text-emerald-400 hover:underline"
+                      >
+                        Open Studio ⚙️
+                      </button>
                     </div>
                     {MASTER_PRESETS.map((p) => (
                       <button
@@ -359,6 +376,13 @@ export const PersistentPlayer = () => {
         beat={currentBeat}
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
+      />
+
+      {/* Spotify -14 LUFS Mastering Studio Suite Modal */}
+      <SpotifyMasteringStudioModal 
+        beat={currentBeat}
+        isOpen={isMasteringStudioOpen}
+        onClose={() => setIsMasteringStudioOpen(false)}
       />
     </>
   );
