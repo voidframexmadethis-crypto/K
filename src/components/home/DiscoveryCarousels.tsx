@@ -12,7 +12,7 @@ export const DiscoveryCarousels: React.FC = () => {
   const [producers, setProducers] = useState<Producer[]>([
     {
       id: 'p1',
-      name: 'KRAEZELV',
+      name: 'KRAEZELVbeatz',
       avatarUrl: '/src/assets/images/hero_studio_cinematic_1791053615857.jpg',
       subscribersCount: 250000,
       verified: true,

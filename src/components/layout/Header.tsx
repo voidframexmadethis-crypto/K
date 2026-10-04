@@ -117,12 +117,15 @@ export const MainHeader = () => {
       <div className="max-w-[1800px] mx-auto px-6 md:px-12 flex items-center justify-between gap-6">
         {/* 1. Master Brand Identity Logo */}
         <Link to="/" className="flex items-center gap-3 shrink-0 group">
-          <div className="w-9 h-9 bg-white flex items-center justify-center rounded-sm group-hover:rotate-90 transition-transform duration-500">
-            <div className="w-5 h-1 bg-black" />
+          <div className="w-9 h-9 bg-purple-600/20 border border-purple-500/40 flex items-center justify-center rounded-sm group-hover:rotate-90 transition-transform duration-500">
+            <div className="w-5 h-1 bg-purple-400" />
           </div>
-          <span className="text-xl md:text-2xl font-black tracking-[0.2em] text-white uppercase leading-none">
-            KRAEZELV<span className="text-white/40">BEATZ</span>
-          </span>
+          <div className="flex flex-col">
+            <span className="text-lg md:text-xl font-black tracking-[0.2em] text-white leading-none">
+              KRAEZELV<span className="text-purple-400">beatz</span>
+            </span>
+            <span className="text-[8px] font-bold uppercase tracking-[0.35em] text-white/40 mt-1">OFFICIAL STORE</span>
+          </div>
         </Link>
 
         {/* 5. Universal Site Search Bar & 6. Search Filter Dropdown Matrix */}

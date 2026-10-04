@@ -7,24 +7,24 @@ export const ProducerFeature = () => {
   return (
     <section className="relative w-full overflow-hidden bg-black py-80">
       {/* Background oversized logo */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[50vw] font-black text-white/[0.01] select-none pointer-events-none uppercase tracking-[-0.1em]">
-        KV
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[40vw] font-black text-purple-500/[0.02] select-none pointer-events-none uppercase tracking-[-0.1em]">
+        CK
       </div>
 
-      <div className="max-w-[1800px] mx-auto px-6 md:px-12 relative z-10 grid lg:grid-cols-12 gap-32 items-center">
-        <div className="lg:col-span-6 flex flex-col gap-16">
-          <div className="flex flex-col gap-10">
-            <div className="flex items-center gap-6">
-               <div className="w-20 h-px bg-white/40" />
-               <span className="text-[12px] font-black uppercase tracking-[0.8em] text-white/60">Architect of Sound</span>
+      <div className="max-w-[1800px] mx-auto px-6 md:px-12 relative z-10 grid lg:grid-cols-12 gap-24 items-center">
+        <div className="lg:col-span-6 flex flex-col gap-12">
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center gap-4">
+               <div className="w-16 h-px bg-purple-500/40" />
+               <span className="text-xs font-black uppercase tracking-[0.5em] text-purple-400">Architect of Sound</span>
             </div>
-            <h2 className="text-[8rem] md:text-[12rem] font-black text-white uppercase tracking-tighter leading-[0.75]">
-              KRAEZELV<br /><span className="text-white/20">BEATZ</span>
+            <h2 className="text-6xl md:text-8xl font-black text-white leading-[0.85]">
+              KRAEZELV<br /><span className="text-purple-400">beatz</span>
             </h2>
           </div>
 
-          <p className="text-3xl text-white/40 uppercase tracking-tight leading-relaxed max-w-2xl font-medium">
-            Defining the next generation of dark cinematic production. Industry-standard textures meet uncompromising modern rhythm. A standalone ecosystem for the world's most ambitious artists.
+          <p className="text-xl md:text-2xl text-white/50 uppercase tracking-tight leading-relaxed max-w-2xl font-medium">
+            Defining the next generation of dark cinematic production. Industry-standard textures meet uncompromising modern rhythm. The official standalone beat catalog for the world's most ambitious recording artists.
           </p>
 
           <div className="flex flex-col gap-16">

@@ -1,325 +1,287 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Heart, Share2, Download, ChevronLeft, ChevronRight, Sparkles, Flame, Tag, Trophy, ShieldCheck, ShoppingCart } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, Volume2, VolumeX, ShoppingBag, ArrowRight, ShieldCheck, Sparkles, Music, Tag } from 'lucide-react';
 import { useAudioStore } from '../../store/useAudioStore';
 import { Beat } from '../../types';
 import { cn } from '../../lib/utils';
 
-interface Slide {
-  id: string;
-  badge: string;
-  badgeIcon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  description: string;
-  statNumber: string;
-  statLabel: string;
-  heroImg: string;
-  artwork: string;
-  ctaText: string;
-  price: string;
-  featuredBeat: Beat;
-}
-
 export const HeroSpotlightCarousel: React.FC = () => {
-  const { setBeat, currentBeat, isPlaying, togglePlay, progress, duration } = useAudioStore();
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [autoPlay, setAutoPlay] = useState(true);
+  const { setBeat, currentBeat, isPlaying, togglePlay, progress, duration, setProgress, volume, setVolume } = useAudioStore();
+  const [isMuted, setIsMuted] = useState(false);
+  const [prevVolume, setPrevVolume] = useState(0.8);
 
-  const artwork1 = '/src/assets/images/hero_valkyrie_massive_1791054144327.jpg';
-  const artwork2 = '/src/assets/images/beat_artwork_abstract_1791053624368.jpg';
-  const artwork3 = '/src/assets/images/pack_artwork_geometric_1791053633249.jpg';
+  const artworkVal = '/src/assets/images/hero_valkyrie_massive_1791054144327.jpg';
 
-  const slides: Slide[] = [
-    {
-      id: 'slide-valkyrie',
-      badge: 'Flagship Production Release',
-      badgeIcon: <Flame size={12} />,
-      title: 'VALKYRIE',
-      subtitle: 'PRODUCER: KRAEZELV · 144 BPM · C MINOR',
-      description: 'Heavy 808s, haunting atmospheric strings, and aggressive brass hits crafted for chart-topping trap and drill projects.',
-      statNumber: '5.2M+',
-      statLabel: 'Beats Sold Platform-Wide',
-      heroImg: artwork1,
-      artwork: artwork1,
-      ctaText: 'Stream Flagship Beat',
-      price: '$29.99',
-      featuredBeat: {
-        id: 'valkyrie-massive',
-        title: 'VALKYRIE',
-        producerId: 'KRAEZELV',
-        bpm: 144,
-        key: 'C MINOR',
-        genre: 'DARK TRAP',
-        tags: ['AGGRESSIVE', 'CINEMATIC', 'HARD'],
-        moods: ['DARK', 'ENERGETIC'],
-        slug: 'valkyrie',
-        isPrivate: false,
-        isBootleg: false,
-        instruments: ['808', 'BRASS', 'STRINGS'],
-        audioUrl: '', 
-        artworkUrl: artwork1,
-        isFree: false,
-        licenses: { 
-          basic: { price: 29.99, enabled: true }, 
-          premium: { price: 49.99, enabled: true }, 
-          unlimited: { price: 99.99, enabled: true }, 
-          exclusive: { price: 499.99, enabled: true } 
-        },
-        createdAt: new Date().toISOString(),
-        published: true
-      }
+  const flagshipBeat: Beat = {
+    id: 'valkyrie-flagship',
+    title: 'VALKYRIE',
+    producerId: 'KRAEZELVbeatz',
+    bpm: 144,
+    key: 'C MINOR',
+    genre: 'DARK TRAP',
+    tags: ['AGGRESSIVE', 'CINEMATIC', 'DRILL'],
+    moods: ['DARK', 'ENERGETIC'],
+    slug: 'valkyrie',
+    isPrivate: false,
+    isBootleg: false,
+    instruments: ['808', 'BRASS', 'STRINGS'],
+    audioUrl: '',
+    artworkUrl: artworkVal,
+    isFree: false,
+    licenses: {
+      basic: { price: 29.99, enabled: true },
+      premium: { price: 49.99, enabled: true },
+      unlimited: { price: 99.99, enabled: true },
+      exclusive: { price: 499.99, enabled: true },
     },
-    {
-      id: 'slide-propage',
-      badge: 'Featured "Pro Page" Producer',
-      badgeIcon: <Trophy size={12} />,
-      title: 'APOLLO',
-      subtitle: 'PRODUCER: KRAEZELV · 140 BPM · D MINOR',
-      description: 'Clean melodic synths over bouncy bounce drums. Ranked #1 Trending Instrumental of the week.',
-      statNumber: '#1 TOP',
-      statLabel: 'Selling Producer Of The Week',
-      heroImg: artwork2,
-      artwork: artwork2,
-      ctaText: 'Stream Apollo',
-      price: '$29.99',
-      featuredBeat: {
-        id: 'b1',
-        title: 'APOLLO',
-        producerId: 'KRAEZELV',
-        bpm: 140,
-        key: 'D MINOR',
-        genre: 'TRAP',
-        tags: ['MELODIC', 'BOUNCY', 'CHART'],
-        moods: ['ENERGETIC'],
-        slug: 'apollo',
-        isPrivate: false,
-        isBootleg: false,
-        instruments: ['SYNTH', '808'],
-        audioUrl: '',
-        artworkUrl: artwork2,
-        isFree: false,
-        licenses: { 
-          basic: { price: 29.99, enabled: true }, 
-          premium: { price: 49.99, enabled: true }, 
-          unlimited: { price: 99.99, enabled: true }, 
-          exclusive: { price: 499.99, enabled: true } 
-        },
-        createdAt: new Date().toISOString(),
-        published: true
-      }
-    },
-    {
-      id: 'slide-sale',
-      badge: 'Summer Sitewide Flash Sale',
-      badgeIcon: <Tag size={12} />,
-      title: 'BUY 2 GET 1',
-      subtitle: 'SPECIAL PROMO · ALL LICENSES INCLUDED',
-      description: 'Stack your basket with any 3 beats and the 3rd beat license is automatically credited 100% FREE at checkout.',
-      statNumber: '120K+',
-      statLabel: 'Active Recording Artists',
-      heroImg: artwork3,
-      artwork: artwork3,
-      ctaText: 'Explore Special Promo',
-      price: 'FREE DEAL',
-      featuredBeat: {
-        id: 'b2',
-        title: 'NIGHTFALL',
-        producerId: 'KRAEZELV',
-        bpm: 128,
-        key: 'A MINOR',
-        genre: 'DARK TRAP',
-        tags: ['FREE', 'SMOOTH'],
-        moods: ['CHILL'],
-        slug: 'nightfall',
-        isPrivate: false,
-        isBootleg: false,
-        instruments: ['PIANO', 'PAD'],
-        audioUrl: '',
-        artworkUrl: artwork2,
-        isFree: true,
-        licenses: { 
-          basic: { price: 29.99, enabled: true }, 
-          premium: { price: 49.99, enabled: true }, 
-          unlimited: { price: 99.99, enabled: true }, 
-          exclusive: { price: 499.99, enabled: true } 
-        },
-        createdAt: new Date().toISOString(),
-        published: true
-      }
-    }
-  ];
-
-  useEffect(() => {
-    if (!autoPlay) return;
-    const timer = setInterval(() => {
-      setCurrentSlideIndex(prev => (prev + 1) % slides.length);
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [autoPlay, slides.length]);
-
-  const currentSlide = slides[currentSlideIndex];
-  const isPlayingCurrent = currentBeat?.id === currentSlide.featuredBeat.id && isPlaying;
-
-  const nextSlide = () => {
-    setAutoPlay(false);
-    setCurrentSlideIndex((currentSlideIndex + 1) % slides.length);
+    createdAt: new Date().toISOString(),
+    published: true,
   };
 
-  const prevSlide = () => {
-    setAutoPlay(false);
-    setCurrentSlideIndex((currentSlideIndex - 1 + slides.length) % slides.length);
+  const isCurrentPlaying = currentBeat?.id === flagshipBeat.id && isPlaying;
+
+  const handlePlayClick = () => {
+    if (currentBeat?.id === flagshipBeat.id) {
+      togglePlay();
+    } else {
+      setBeat(flagshipBeat);
+    }
+  };
+
+  const toggleMute = () => {
+    if (isMuted) {
+      setVolume(prevVolume);
+      setIsMuted(false);
+    } else {
+      setPrevVolume(volume);
+      setVolume(0);
+      setIsMuted(true);
+    }
+  };
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60) || 0;
+    const s = Math.floor(secs % 60) || 0;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
-    <section className="relative w-full min-h-[90vh] flex flex-col justify-center items-center overflow-hidden pt-20 bg-black">
-      {/* Dynamic Background */}
-      <div className="absolute inset-0 z-0">
-        <img 
-          src={currentSlide.heroImg} 
-          className="w-full h-full object-cover scale-110 blur-[2px] brightness-[0.25] transition-all duration-1000 ease-out" 
-          alt="Banner Visual" 
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/50 to-black" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_90%)]" />
+    <section className="relative w-full min-h-[85vh] flex flex-col justify-center items-center overflow-hidden bg-black pt-24 pb-16 border-b border-white/10">
+      {/* Background Ambient Glow */}
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-purple-900/15 blur-[140px] rounded-full" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_85%)]" />
       </div>
 
-      {/* Main Slide Content Grid */}
-      <div className="relative z-10 w-full max-w-[1800px] px-6 md:px-12 grid lg:grid-cols-12 gap-12 items-center flex-1 py-12">
-        {/* Left Copy & Actions */}
-        <div className="lg:col-span-7 flex flex-col gap-8 animate-in fade-in slide-in-from-left-6 duration-700">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span className="p-2 bg-white/10 border border-white/20 text-white flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.3em]">
-                {currentSlide.badgeIcon} {currentSlide.badge}
-              </span>
-              <span className="h-px w-12 bg-white/20" />
-            </div>
-
-            <h1 className="text-[6rem] sm:text-[8rem] md:text-[11rem] font-black tracking-[-0.05em] text-white leading-[0.8] uppercase select-none">
-              {currentSlide.title}
-            </h1>
-
-            <p className="text-xs md:text-sm font-bold uppercase tracking-[0.3em] text-white/60">
-              {currentSlide.subtitle}
-            </p>
-
-            <p className="text-sm md:text-base font-medium text-white/70 max-w-2xl leading-relaxed uppercase tracking-wide">
-              {currentSlide.description}
-            </p>
-          </div>
-
-          {/* Micro-Stats Overlays Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 border-t border-white/10">
-            <div className="p-4 bg-white/[0.03] border border-white/10 flex flex-col gap-1">
-              <span className="text-2xl md:text-3xl font-black text-white tracking-tight">{currentSlide.statNumber}</span>
-              <span className="text-[8px] font-bold uppercase tracking-widest text-white/40">{currentSlide.statLabel}</span>
-            </div>
-            <div className="p-4 bg-white/[0.03] border border-white/10 flex flex-col gap-1">
-              <span className="text-2xl md:text-3xl font-black text-white tracking-tight">100%</span>
-              <span className="text-[8px] font-bold uppercase tracking-widest text-white/40">Royalty-Free Commercial Guarantee</span>
-            </div>
-            <div className="hidden sm:flex p-4 bg-white/[0.03] border border-white/10 flex-col gap-1">
-              <span className="text-2xl md:text-3xl font-black text-white tracking-tight">Instant</span>
-              <span className="text-[8px] font-bold uppercase tracking-widest text-white/40">Untagged WAV & Stems Delivery</span>
-            </div>
-          </div>
-
-          {/* Action CTAs */}
-          <div className="flex flex-wrap items-center gap-6 pt-2">
-            <button 
-              onClick={() => {
-                if (currentBeat?.id === currentSlide.featuredBeat.id) {
-                  togglePlay();
-                } else {
-                  setBeat(currentSlide.featuredBeat);
-                }
-              }}
-              className="px-12 py-6 bg-white text-black font-black uppercase tracking-[0.4em] text-xs hover:bg-neutral-200 transition-all active:scale-95 flex items-center gap-4 shadow-[0_0_50px_rgba(255,255,255,0.2)]"
-            >
-              <Play size={18} fill="black" /> {isPlayingCurrent ? 'Pause Track' : currentSlide.ctaText}
-            </button>
-
-            <button className="px-10 py-6 border border-white/20 text-white font-black uppercase tracking-[0.4em] text-xs hover:bg-white hover:text-black transition-all">
-              License Starting {currentSlide.price}
-            </button>
-          </div>
+      <div className="relative z-10 w-full max-w-[1700px] px-6 sm:px-10 md:px-12 mx-auto">
+        {/* KRAEZELVbeatz Single Producer Kicker */}
+        <div className="flex items-center gap-3 mb-8">
+          <span className="text-[10px] font-black uppercase tracking-[0.35em] text-purple-400 bg-purple-950/40 border border-purple-500/30 px-3.5 py-1.5 flex items-center gap-2">
+            <Sparkles size={12} className="text-purple-400" /> KRAEZELVbeatz · OFFICIAL STORE
+          </span>
+          <div className="h-px w-16 bg-white/15 hidden sm:block" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/40 hidden md:inline">
+            INDEPENDENT MUSIC CATALOG
+          </span>
         </div>
 
-        {/* Right Artwork Showcase with Instant Play Floating Overlay */}
-        <div className="lg:col-span-5 flex flex-col items-center justify-center">
-          <div className="relative group w-full aspect-square max-w-lg bg-neutral-950 border border-white/10 overflow-hidden shadow-[0_0_100px_rgba(255,255,255,0.05)]">
-            <img 
-              src={currentSlide.artwork} 
-              alt={currentSlide.title}
-              className="w-full h-full object-cover grayscale opacity-60 group-hover:opacity-100 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700" 
-            />
+        {/* Main Grid: Clean Hierarchy */}
+        <div className="grid lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+          
+          {/* Left Column: Featured Beat Metadata & CTAs */}
+          <div className="lg:col-span-6 flex flex-col justify-center gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-widest text-white/50">
+                <span>FLAGSHIP PRODUCTION RELEASE</span>
+                <span className="text-white/20">·</span>
+                <span className="text-purple-300 font-black">2026 CATALOG #01</span>
+              </div>
 
-            {/* Instant Play Call-To-Action Floating Button */}
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <button 
-                onClick={() => {
-                  if (currentBeat?.id === currentSlide.featuredBeat.id) {
-                    togglePlay();
-                  } else {
-                    setBeat(currentSlide.featuredBeat);
-                  }
-                }}
-                className="w-32 h-32 bg-black/50 backdrop-blur-2xl border border-white/20 rounded-full flex items-center justify-center hover:bg-white hover:text-black transition-all duration-500 hover:scale-110 active:scale-95 group/play shadow-[0_0_80px_rgba(0,0,0,0.8)]"
+              {/* Reduced, Powerful Title Treatment */}
+              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black uppercase text-white tracking-tight leading-[0.95]">
+                VALKYRIE
+              </h1>
+
+              {/* Clean Unboxed Metadata */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-bold uppercase tracking-wider text-white/70 pt-1">
+                <span className="text-white font-black">PRODUCED BY KRAEZELVbeatz</span>
+                <span className="text-white/30">·</span>
+                <span className="text-purple-400 font-black">144 BPM</span>
+                <span className="text-white/30">·</span>
+                <span>C MINOR</span>
+                <span className="text-white/30">·</span>
+                <span>DARK TRAP / DRILL</span>
+              </div>
+
+              {/* Short Description */}
+              <p className="text-sm md:text-base text-white/60 leading-relaxed max-w-xl pt-2">
+                Heavy 808s, haunting atmospheric strings, and aggressive brass hits crafted for chart-topping trap and drill projects.
+              </p>
+            </div>
+
+            {/* Primary & Secondary CTAs (No competing giant button noise) */}
+            <div className="flex flex-wrap items-center gap-4 pt-2">
+              <button
+                onClick={handlePlayClick}
+                className="px-8 py-4 bg-white text-black font-black uppercase tracking-[0.3em] text-xs hover:bg-neutral-200 transition-all flex items-center gap-3 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.15)]"
               >
-                {isPlayingCurrent ? (
-                  <div className="flex gap-1.5 items-end h-10">
-                    <div className="w-2 h-8 bg-white group-hover/play:bg-black animate-pulse" />
-                    <div className="w-2 h-10 bg-white group-hover/play:bg-black animate-pulse delay-75" />
-                    <div className="w-2 h-6 bg-white group-hover/play:bg-black animate-pulse delay-150" />
-                  </div>
+                {isCurrentPlaying ? (
+                  <>
+                    <Pause size={16} fill="black" /> PAUSE TRACK
+                  </>
                 ) : (
-                  <Play size={44} fill="currentColor" className="ml-2 group-hover/play:scale-110 transition-transform" />
+                  <>
+                    <Play size={16} fill="black" /> PLAY / LISTEN
+                  </>
                 )}
               </button>
+
+              <a
+                href="#beats"
+                className="px-8 py-4 border border-white/20 text-white font-black uppercase tracking-[0.3em] text-xs hover:bg-white/10 hover:border-white transition-all flex items-center gap-2"
+              >
+                BROWSE BEATS <ArrowRight size={14} />
+              </a>
             </div>
 
-            {/* Floating Top Tag */}
-            <div className="absolute top-6 left-6 bg-black/80 backdrop-blur-md border border-white/10 px-4 py-2 text-[9px] font-black uppercase tracking-[0.3em] text-white">
-              Instant Stream Enabled
+            {/* Factual Single-Producer Statistics Only (Section 6 Compliant) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-white/10 mt-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xl font-black text-white tracking-tight">150+</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Beats Available</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xl font-black text-white tracking-tight">24</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Beat Packs</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xl font-black text-white tracking-tight">12</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Free Downloads</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xl font-black text-purple-400 tracking-tight">100%</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Commercial Rights</span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Carousel Controls & Indicators */}
-      <div className="relative z-10 w-full max-w-[1800px] px-6 md:px-12 py-6 flex items-center justify-between border-t border-white/10">
-        <div className="flex items-center gap-3">
-          {slides.map((s, idx) => (
-            <button 
-              key={s.id}
-              onClick={() => {
-                setAutoPlay(false);
-                setCurrentSlideIndex(idx);
-              }}
-              className={cn(
-                "h-1.5 transition-all duration-500",
-                idx === currentSlideIndex ? "w-12 bg-white" : "w-4 bg-white/20 hover:bg-white/40"
-              )}
-            />
-          ))}
-        </div>
+          {/* Right Column: Featured Audio Player Card (Section 3) */}
+          <div className="lg:col-span-6 flex justify-center">
+            <div className="w-full max-w-xl bg-neutral-950/80 border border-white/15 p-6 sm:p-8 backdrop-blur-xl relative shadow-2xl space-y-6">
+              
+              {/* Card Top Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/50">
+                  <Music size={14} className="text-purple-400" />
+                  <span>FEATURED PLAYER</span>
+                </div>
+                <span className="text-[10px] font-mono font-bold text-purple-400 uppercase tracking-widest bg-purple-950/60 border border-purple-500/30 px-2.5 py-1">
+                  $29.99 STARTING
+                </span>
+              </div>
 
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={prevSlide}
-            className="p-3 border border-white/10 text-white/40 hover:text-white hover:border-white transition-all"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
-            0{currentSlideIndex + 1} / 0{slides.length}
-          </span>
-          <button 
-            onClick={nextSlide}
-            className="p-3 border border-white/10 text-white/40 hover:text-white hover:border-white transition-all"
-          >
-            <ChevronRight size={18} />
-          </button>
+              {/* Large Artwork & Main Track Info */}
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="relative group w-36 h-36 sm:w-44 sm:h-44 bg-neutral-900 border border-white/10 shrink-0 overflow-hidden shadow-lg">
+                  <img
+                    src={flagshipBeat.artworkUrl}
+                    alt={flagshipBeat.title}
+                    className={cn(
+                      "w-full h-full object-cover transition-all duration-700",
+                      isCurrentPlaying ? "scale-105 brightness-110" : "grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100"
+                    )}
+                  />
+                  <button
+                    onClick={handlePlayClick}
+                    className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-90 hover:opacity-100 transition-opacity"
+                  >
+                    <div className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                      {isCurrentPlaying ? <Pause size={24} fill="black" /> : <Play size={24} fill="black" className="ml-1" />}
+                    </div>
+                  </button>
+                </div>
+
+                <div className="flex flex-col justify-center gap-2 text-center sm:text-left flex-1">
+                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-purple-400">
+                    KRAEZELVbeatz · EXCLUSIVE MASTER
+                  </span>
+                  <h3 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">
+                    {flagshipBeat.title}
+                  </h3>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs font-bold uppercase text-white/50">
+                    <span>{flagshipBeat.bpm} BPM</span>
+                    <span>·</span>
+                    <span>{flagshipBeat.key}</span>
+                    <span>·</span>
+                    <span className="text-white/80">{flagshipBeat.genre}</span>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-center sm:justify-start gap-3">
+                    <a
+                      href="#beats"
+                      className="px-5 py-2.5 bg-white text-black text-[10px] font-black uppercase tracking-widest hover:bg-neutral-200 transition-colors flex items-center gap-1.5"
+                    >
+                      <ShoppingBag size={12} /> LICENSE BEAT ($29.99)
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar & Waveform Timeline */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-white/40">
+                  <span>{currentBeat?.id === flagshipBeat.id ? formatTime((progress / 100) * (duration || 204)) : '0:00'}</span>
+                  <span>{formatTime(duration || 204)}</span>
+                </div>
+
+                <div
+                  className="relative w-full h-3 bg-white/10 cursor-pointer overflow-hidden group/bar"
+                  onClick={(e) => {
+                    if (currentBeat?.id === flagshipBeat.id) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const clickPos = (e.clientX - rect.left) / rect.width;
+                      setProgress(clickPos * 100);
+                    } else {
+                      handlePlayClick();
+                    }
+                  }}
+                >
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-500 to-white transition-all duration-150"
+                    style={{ width: `${currentBeat?.id === flagshipBeat.id ? progress : 0}%` }}
+                  />
+                  <div className="absolute inset-0 bg-white/5 opacity-0 group-hover/bar:opacity-100 transition-opacity" />
+                </div>
+              </div>
+
+              {/* Bottom Controls: Volume & Guarantees */}
+              <div className="flex items-center justify-between pt-2 text-xs font-bold text-white/50 border-t border-white/10">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={14} className="text-purple-400" />
+                  <span className="text-[9px] uppercase tracking-widest">Untagged WAV Stems Ready</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button onClick={toggleMute} className="hover:text-white transition-colors">
+                    {isMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => {
+                      setVolume(parseFloat(e.target.value));
+                      if (isMuted) setIsMuted(false);
+                    }}
+                    className="w-16 h-1 bg-white/20 accent-purple-400 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
