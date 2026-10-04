@@ -9,7 +9,7 @@ import {
   Volume2, Sparkles, RefreshCw, Key, Share2, Copy, Check, Eye, 
   EyeOff, Sliders, Cpu, Video, Download, FileText, PieChart, 
   CreditCard, Radio, Hash, Mic, Award, Zap, ChevronDown, ChevronUp,
-  HardDrive, Activity, Palette
+  HardDrive, Activity, Palette, SlidersHorizontal, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -34,7 +34,7 @@ export const BeatUploader = () => {
   const [activeSection, setActiveSection] = useState(1);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // --- COMPREHENSIVE FORM STATE FOR ALL 150+ FEATURES ---
+  // --- COMPREHENSIVE FORM STATE FOR ALL FEATURES ---
   const [formData, setFormData] = useState({
     // 1. Release Info
     title: 'VALKYRIE',
@@ -74,7 +74,11 @@ export const BeatUploader = () => {
     isScanningKey: false,
     detectedKeyInfo: 'C Minor (99.4% Harmonic Confidence)',
 
-    // 4. Pricing & Licensing
+    // 4. Pricing & Licensing Mode (Tiered vs Custom Direct)
+    pricingMode: 'tiered' as 'tiered' | 'direct',
+    directPrice: '49.99',
+    directPriceLabel: 'Direct Track Buyout',
+    directCheckoutUrl: '',
     isFreeDownload: false,
     freeUnlockMechanic: 'email',
     mp3LeasePrice: '29.99',
@@ -82,11 +86,11 @@ export const BeatUploader = () => {
     stemsLeasePrice: '99.99',
     exclusiveBuyoutPrice: '499.99',
     selectedBlueprint: 'mid',
-    licenses: {
-      basic: { name: 'Basic MP3 Lease', price: '29.99', enabled: true, streamCap: '100,000' },
-      premium: { name: 'Premium WAV Lease', price: '49.99', enabled: true, streamCap: '500,000' },
-      unlimited: { name: 'Platinum Unlimited Rights', price: '99.99', enabled: true, streamCap: 'Unlimited' },
-      exclusive: { name: 'Full Exclusive Rights', price: '499.99', enabled: true, streamCap: 'Unlimited' },
+    enabledLicenses: {
+      basic: true,
+      premium: true,
+      unlimited: true,
+      exclusive: true,
     },
 
     // 5. Store & Visibility
@@ -153,6 +157,17 @@ export const BeatUploader = () => {
     setFormData((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tagToRemove) }));
   };
 
+  // Toggle individual license tier enabled state
+  const toggleLicenseTier = (tierKey: keyof typeof formData.enabledLicenses) => {
+    setFormData((prev) => ({
+      ...prev,
+      enabledLicenses: {
+        ...prev.enabledLicenses,
+        [tierKey]: !prev.enabledLicenses[tierKey]
+      }
+    }));
+  };
+
   // Pricing Blueprint Presets
   const applyBlueprint = (type: 'lower' | 'mid' | 'upper' | 'highest') => {
     let prices = { basic: '19.99', premium: '39.99', unlimited: '79.99', exclusive: '299.99' };
@@ -176,7 +191,7 @@ export const BeatUploader = () => {
   const isAudioReady = !!formData.audioFileName;
   const isArtworkReady = !!formData.coverArtName;
   const isMetadataReady = !!(formData.title && formData.bpm && formData.key && formData.primaryGenre);
-  const isPricingReady = formData.isFreeDownload || parseFloat(formData.mp3LeasePrice) > 0;
+  const isPricingReady = formData.isFreeDownload || (formData.pricingMode === 'direct' ? parseFloat(formData.directPrice) > 0 : (parseFloat(formData.mp3LeasePrice) > 0 || parseFloat(formData.wavLeasePrice) > 0));
   const isStoreReady = true;
 
   const handlePublish = () => {
@@ -199,11 +214,16 @@ export const BeatUploader = () => {
       stemsUrl: formData.stemsUrl || '',
       isFree: formData.isFreeDownload,
       playsCount: 0,
-      licenses: {
-        basic: { price: parseFloat(formData.mp3LeasePrice) || 29.99, enabled: true },
-        premium: { price: parseFloat(formData.wavLeasePrice) || 49.99, enabled: true },
-        unlimited: { price: parseFloat(formData.stemsLeasePrice) || 99.99, enabled: true },
-        exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: true },
+      licenses: formData.pricingMode === 'direct' ? {
+        basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
+        premium: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+        unlimited: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+        exclusive: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+      } : {
+        basic: { price: parseFloat(formData.mp3LeasePrice) || 29.99, enabled: formData.enabledLicenses.basic },
+        premium: { price: parseFloat(formData.wavLeasePrice) || 49.99, enabled: formData.enabledLicenses.premium },
+        unlimited: { price: parseFloat(formData.stemsLeasePrice) || 99.99, enabled: formData.enabledLicenses.unlimited },
+        exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
       },
       createdAt: new Date().toISOString(),
       published: true,
@@ -506,18 +526,59 @@ export const BeatUploader = () => {
           </div>
         )}
 
-        {/* 5. PRICING SECTION */}
+        {/* 5. PRICING SECTION (TIERED VS DIRECT CUSTOM PRICING) */}
         {(activeSection === 5 || activeSection === 8) && (
           <div className="p-8 bg-neutral-950 border border-white/10 rounded-sm space-y-8">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <DollarSign size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">5. Pricing & Licensing</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">5. Pricing & Checkout Options</h3>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">PayPal & Stripe Connected</span>
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Custom Direct or Tiered Matrix</span>
             </div>
 
-            {/* FREE VS PAID TOGGLE */}
+            {/* PRICING MODE STRATEGY SWITCHER */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, pricingMode: 'tiered' })}
+                className={cn(
+                  "p-5 border text-left flex flex-col justify-between gap-3 transition-all",
+                  formData.pricingMode === 'tiered' 
+                    ? "border-purple-500 bg-purple-500/10 text-white" 
+                    : "border-white/10 bg-white/[0.02] text-white/50 hover:text-white"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider">Tiered License Matrix</span>
+                  <SlidersHorizontal size={18} className={formData.pricingMode === 'tiered' ? 'text-purple-400' : 'text-white/30'} />
+                </div>
+                <p className="text-[10px] text-white/50 leading-relaxed uppercase">
+                  Offer Basic MP3, Premium WAV, Unlimited Stems, and Exclusive Rights. Easily enable/disable specific tiers.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, pricingMode: 'direct' })}
+                className={cn(
+                  "p-5 border text-left flex flex-col justify-between gap-3 transition-all",
+                  formData.pricingMode === 'direct' 
+                    ? "border-emerald-500 bg-emerald-500/10 text-white" 
+                    : "border-white/10 bg-white/[0.02] text-white/50 hover:text-white"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider">Custom Direct Flat Pricing</span>
+                  <DollarSign size={18} className={formData.pricingMode === 'direct' ? 'text-emerald-400' : 'text-white/30'} />
+                </div>
+                <p className="text-[10px] text-white/50 leading-relaxed uppercase">
+                  Bypass tier matrices. Set a single flat purchase price or attach a custom direct invoice/checkout link.
+                </p>
+              </button>
+            </div>
+
+            {/* FREE RELEASE TOGGLE */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-6 bg-white/[0.02] border border-white/10 rounded-sm">
               <div className="space-y-1">
                 <span className="text-lg font-black uppercase text-white">Free Download Release</span>
@@ -531,6 +592,7 @@ export const BeatUploader = () => {
                   {formData.isFreeDownload ? 'FREE ACTIVE' : 'PAID ONLY'}
                 </span>
                 <button 
+                  type="button"
                   onClick={() => setFormData({ ...formData, isFreeDownload: !formData.isFreeDownload })}
                   className={cn("w-14 h-7 rounded-full relative transition-all", formData.isFreeDownload ? "bg-purple-600" : "bg-white/10")}
                 >
@@ -539,15 +601,65 @@ export const BeatUploader = () => {
               </div>
             </div>
 
-            {/* PRICE BLUEPRINT PRESETS */}
-            {!formData.isFreeDownload && (
+            {/* DIRECT PRICING MODE CONFIGURATION */}
+            {!formData.isFreeDownload && formData.pricingMode === 'direct' && (
+              <div className="p-6 bg-emerald-500/5 border border-emerald-500/30 rounded-sm space-y-6">
+                <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Direct Single Buyout Pricing</span>
+                  <span className="text-[9px] font-mono text-emerald-300 uppercase">License Tiers Bypassed</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/60 block">Direct Track Price ($) *</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold">$</span>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        value={formData.directPrice}
+                        onChange={(e) => setFormData({ ...formData, directPrice: e.target.value })}
+                        className="w-full bg-black border border-emerald-500/30 p-3 pl-8 text-xl font-black text-emerald-400 outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/60 block">Price Badge / Contract Label</label>
+                    <input 
+                      type="text"
+                      value={formData.directPriceLabel}
+                      onChange={(e) => setFormData({ ...formData, directPriceLabel: e.target.value })}
+                      placeholder="e.g. Single Track Buyout"
+                      className="w-full bg-black border border-white/20 p-3 text-xs font-bold text-white outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/60 block">Custom Direct Checkout URL (Optional)</label>
+                  <input 
+                    type="url"
+                    value={formData.directCheckoutUrl}
+                    onChange={(e) => setFormData({ ...formData, directCheckoutUrl: e.target.value })}
+                    placeholder="https://stripe.com/pay/custom_beat_link or PayPal Invoice URL"
+                    className="w-full bg-black border border-white/20 p-3 text-xs font-mono text-white outline-none focus:border-emerald-400"
+                  />
+                  <p className="text-[9px] text-white/40 uppercase">If provided, buyers clicking Buy will be directed to this exact link.</p>
+                </div>
+              </div>
+            )}
+
+            {/* TIERED LICENSING MATRIX WITH INDIVIDUAL ENABLE/DISABLE TOGGLES */}
+            {!formData.isFreeDownload && formData.pricingMode === 'tiered' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-widest text-white/60">Quick Pricing Blueprints</span>
+                  <span className="text-xs font-black uppercase tracking-widest text-white/60">Quick Pricing Presets</span>
                   <div className="flex gap-2">
                     {(['lower', 'mid', 'upper', 'highest'] as const).map((blueprint) => (
                       <button
                         key={blueprint}
+                        type="button"
                         onClick={() => applyBlueprint(blueprint)}
                         className={cn(
                           "px-4 py-2 text-[9px] font-black uppercase tracking-widest border transition-all",
@@ -561,54 +673,142 @@ export const BeatUploader = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Basic MP3</span>
+                  {/* BASIC MP3 TIER CARD */}
+                  <div className={cn(
+                    "p-6 border rounded-sm space-y-4 transition-all relative",
+                    formData.enabledLicenses.basic 
+                      ? "bg-white/[0.02] border-white/10" 
+                      : "bg-black/80 border-red-500/30 opacity-60"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Basic MP3</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleLicenseTier('basic')}
+                        className={cn(
+                          "px-2.5 py-1 text-[8px] font-black uppercase tracking-widest border transition-all",
+                          formData.enabledLicenses.basic 
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
+                            : "bg-red-500/20 text-red-400 border-red-500/40"
+                        )}
+                      >
+                        {formData.enabledLicenses.basic ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </div>
+
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">$</span>
                       <input 
                         type="number" 
+                        disabled={!formData.enabledLicenses.basic}
                         value={formData.mp3LeasePrice}
                         onChange={(e) => setFormData({ ...formData, mp3LeasePrice: e.target.value })}
-                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500"
+                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500 disabled:opacity-40"
                       />
                     </div>
                   </div>
 
-                  <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Premium WAV</span>
+                  {/* PREMIUM WAV TIER CARD */}
+                  <div className={cn(
+                    "p-6 border rounded-sm space-y-4 transition-all relative",
+                    formData.enabledLicenses.premium 
+                      ? "bg-white/[0.02] border-white/10" 
+                      : "bg-black/80 border-red-500/30 opacity-60"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Premium WAV</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleLicenseTier('premium')}
+                        className={cn(
+                          "px-2.5 py-1 text-[8px] font-black uppercase tracking-widest border transition-all",
+                          formData.enabledLicenses.premium 
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
+                            : "bg-red-500/20 text-red-400 border-red-500/40"
+                        )}
+                      >
+                        {formData.enabledLicenses.premium ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </div>
+
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">$</span>
                       <input 
                         type="number" 
+                        disabled={!formData.enabledLicenses.premium}
                         value={formData.wavLeasePrice}
                         onChange={(e) => setFormData({ ...formData, wavLeasePrice: e.target.value })}
-                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500"
+                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500 disabled:opacity-40"
                       />
                     </div>
                   </div>
 
-                  <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Unlimited Stems</span>
+                  {/* UNLIMITED STEMS TIER CARD */}
+                  <div className={cn(
+                    "p-6 border rounded-sm space-y-4 transition-all relative",
+                    formData.enabledLicenses.unlimited 
+                      ? "bg-white/[0.02] border-white/10" 
+                      : "bg-black/80 border-red-500/30 opacity-60"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Unlimited Stems</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleLicenseTier('unlimited')}
+                        className={cn(
+                          "px-2.5 py-1 text-[8px] font-black uppercase tracking-widest border transition-all",
+                          formData.enabledLicenses.unlimited 
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
+                            : "bg-red-500/20 text-red-400 border-red-500/40"
+                        )}
+                      >
+                        {formData.enabledLicenses.unlimited ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </div>
+
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">$</span>
                       <input 
                         type="number" 
+                        disabled={!formData.enabledLicenses.unlimited}
                         value={formData.stemsLeasePrice}
                         onChange={(e) => setFormData({ ...formData, stemsLeasePrice: e.target.value })}
-                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500"
+                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500 disabled:opacity-40"
                       />
                     </div>
                   </div>
 
-                  <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Exclusive Rights</span>
+                  {/* EXCLUSIVE RIGHTS TIER CARD */}
+                  <div className={cn(
+                    "p-6 border rounded-sm space-y-4 transition-all relative",
+                    formData.enabledLicenses.exclusive 
+                      ? "bg-white/[0.02] border-white/10" 
+                      : "bg-black/80 border-red-500/30 opacity-60"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 block">Exclusive Rights</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleLicenseTier('exclusive')}
+                        className={cn(
+                          "px-2.5 py-1 text-[8px] font-black uppercase tracking-widest border transition-all",
+                          formData.enabledLicenses.exclusive 
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
+                            : "bg-red-500/20 text-red-400 border-red-500/40"
+                        )}
+                      >
+                        {formData.enabledLicenses.exclusive ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </div>
+
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">$</span>
                       <input 
                         type="number" 
+                        disabled={!formData.enabledLicenses.exclusive}
                         value={formData.exclusiveBuyoutPrice}
                         onChange={(e) => setFormData({ ...formData, exclusiveBuyoutPrice: e.target.value })}
-                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500"
+                        className="w-full bg-white/5 border border-white/15 p-3 pl-8 text-lg font-black text-white outline-none focus:border-purple-500 disabled:opacity-40"
                       />
                     </div>
                   </div>
@@ -792,6 +992,35 @@ export const BeatUploader = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* STEP NAVIGATION ACTION BAR WITH NEXT STEP ARROW */}
+        {activeSection < 8 && (
+          <div className="p-6 bg-neutral-950 border border-white/15 rounded-sm flex items-center justify-between shadow-2xl">
+            {activeSection > 1 ? (
+              <button
+                type="button"
+                onClick={() => setActiveSection(prev => Math.max(1, prev - 1))}
+                className="px-6 py-3.5 border border-white/20 text-white text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-white/10 transition-all active:scale-95"
+              >
+                <ArrowLeft size={16} /> Previous Step
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest hidden sm:inline">
+                Step {activeSection} of 8: {sectionTabs.find(t => t.id === activeSection)?.name}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setActiveSection(prev => Math.min(8, prev + 1))}
+                className="px-8 py-4 bg-white text-black font-black uppercase tracking-[0.25em] text-xs flex items-center gap-3 hover:bg-neutral-200 transition-all active:scale-95 shadow-2xl"
+              >
+                Next Step <ArrowRight size={18} />
+              </button>
             </div>
           </div>
         )}

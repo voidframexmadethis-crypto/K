@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Music, ShoppingCart, BarChart3, Video, Settings, Plus, Award, LogOut, ExternalLink, User as UserIcon, ChevronDown, Target, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Music, ShoppingCart, BarChart3, Video, Settings, Plus, Award, LogOut, ExternalLink, User as UserIcon, ChevronDown, Target, Sparkles, Glasses } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -12,11 +12,11 @@ function cn(...inputs: ClassValue[]) {
 const menuItems = [
   { name: 'Overview', icon: LayoutDashboard, href: '/dashboard' },
   { name: 'Music Library', icon: Music, href: '/dashboard/music' },
-  { name: 'Sales & Orders', icon: ShoppingCart, href: '/dashboard/sales' },
-  { name: 'Analytics', icon: BarChart3, href: '/dashboard/analytics' },
+  { name: 'Sales & Ledger', icon: ShoppingCart, href: '/dashboard/sales' },
+  { name: 'Analytics Engine', icon: BarChart3, href: '/dashboard/analytics' },
+  { name: 'VR Headset Reviews', icon: Glasses, href: '/dashboard/vr-reviews' },
   { name: 'Marketing', icon: Target, href: '/dashboard/marketing' },
   { name: 'Content Lab', icon: Video, href: '/dashboard/content' },
-  { name: '$0 Organic Promotion', icon: Sparkles, href: '/dashboard/marketing' },
   { name: 'Achievements', icon: Award, href: '/dashboard/achievements' },
   { name: 'Settings', icon: Settings, href: '/dashboard/settings' },
 ];

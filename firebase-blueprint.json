@@ -31,30 +31,54 @@
       },
       "required": ["title", "audioUrl", "producerId"]
     },
-    "BeatPack": {
-      "title": "Beat Pack Entity",
-      "description": "A collection of beats sold as a bundle.",
+    "AnalyticsEvent": {
+      "title": "Analytics Event",
+      "description": "Real-time store event tracking record.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "artworkUrl": { "type": "string" },
-        "beatIds": { "type": "array" },
-        "price": { "type": "number" },
-        "createdAt": { "type": "string" }
+        "eventType": { "type": "string", "enum": ["play", "page_view", "cart_add", "checkout_completed", "free_download", "vr_view"] },
+        "beatId": { "type": "string" },
+        "beatTitle": { "type": "string" },
+        "amount": { "type": "number" },
+        "country": { "type": "string" },
+        "device": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
       }
     },
-    "Collection": {
-      "title": "Collection Entity",
-      "description": "A curated list of beats (e.g., Trap, Melodic).",
+    "Order": {
+      "title": "Order Ledger Entry",
+      "description": "Real store purchase transaction record.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "artworkUrl": { "type": "string" },
-        "slug": { "type": "string" }
+        "customerEmail": { "type": "string" },
+        "beatId": { "type": "string" },
+        "beatTitle": { "type": "string" },
+        "licenseType": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentGateway": { "type": "string" },
+        "status": { "type": "string" },
+        "downloadKey": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "VRReview": {
+      "title": "VR Review Entity",
+      "description": "Real-life VR studio headset listening review and spatial evaluation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "beatId": { "type": "string" },
+        "beatTitle": { "type": "string" },
+        "reviewerName": { "type": "string" },
+        "rating": { "type": "number" },
+        "vrHeadsetModel": { "type": "string" },
+        "environmentName": { "type": "string" },
+        "spatialAudioScore": { "type": "number" },
+        "bassClarityScore": { "type": "number" },
+        "reviewText": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
       }
     },
     "User": {
@@ -76,13 +100,17 @@
       "schema": "Beat",
       "description": "Public catalog of available beats."
     },
-    "/beatPacks/{packId}": {
-      "schema": "BeatPack",
-      "description": "Bundled products."
+    "/analytics_events/{eventId}": {
+      "schema": "AnalyticsEvent",
+      "description": "Store real-time analytics events."
     },
-    "/collections/{colId}": {
-      "schema": "Collection",
-      "description": "Curated genre/mood collections."
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Store transactions and sales ledger."
+    },
+    "/vr_reviews/{reviewId}": {
+      "schema": "VRReview",
+      "description": "Real-life VR studio reviews and spatial audio feedback."
     },
     "/users/{userId}": {
       "schema": "User",

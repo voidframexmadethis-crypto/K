@@ -47,16 +47,26 @@ export const useAudioStore = create<AudioStore>((set) => ({
   repeatMode: 'none',
   isQueueOpen: false,
 
-  setBeat: (beat) => set((state) => {
-    // Add current to history before switching
-    const newHistory = state.currentBeat ? [state.currentBeat, ...state.history.slice(0, 19)] : state.history;
-    return { 
-      currentBeat: beat, 
-      isPlaying: true, 
-      progress: 0,
-      history: newHistory
-    };
-  }),
+  setBeat: (beat) => {
+    // Dynamically log analytics event
+    import('../services/analyticsService').then(({ logAnalyticsEvent }) => {
+      logAnalyticsEvent({
+        eventType: 'play',
+        beatId: beat.id,
+        beatTitle: beat.title
+      });
+    }).catch(() => {});
+
+    set((state) => {
+      const newHistory = state.currentBeat ? [state.currentBeat, ...state.history.slice(0, 19)] : state.history;
+      return { 
+        currentBeat: beat, 
+        isPlaying: true, 
+        progress: 0,
+        history: newHistory
+      };
+    });
+  },
 
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
   setPlaying: (playing) => set({ isPlaying: playing }),

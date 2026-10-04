@@ -186,8 +186,23 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
                 amount={activeOption.price}
                 currency="USD"
                 description={`${activeOption.name} - ${beat.title}`}
-                onSuccess={(details) => {
+                onSuccess={async (details) => {
                   console.log('Payment Successful:', details);
+                  try {
+                    const { recordStoreOrder } = await import('../../services/analyticsService');
+                    await recordStoreOrder({
+                      customerEmail: details?.payer?.email_address || 'buyer@kraezelvbeatz.com',
+                      beatId: beat.id,
+                      beatTitle: beat.title,
+                      licenseType: activeOption.name,
+                      amount: activeOption.price,
+                      paymentGateway: 'PayPal',
+                      status: 'Completed',
+                      downloadKey: `KZB-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+                    });
+                  } catch (e) {
+                    console.warn('Order record error:', e);
+                  }
                   alert(`Thank you! Your purchase of "${beat.title}" was successful.`);
                   onClose();
                 }}

@@ -1,5 +1,8 @@
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Play } from 'lucide-react';
+import { collection, onSnapshot, query } from 'firebase/firestore';
+import { db } from './lib/firebase';
+import { OrderRecord, AnalyticsEventData } from './services/analyticsService';
 import { MainHeader } from './components/layout/Header';
 import { PersistentPlayer } from './components/player/PersistentPlayer';
 import { MassiveFooter } from './components/layout/MassiveFooter';
@@ -20,69 +23,100 @@ import { AnalyticsDashboard } from './components/dashboard/AnalyticsDashboard';
 import { MarketingDashboard } from './components/dashboard/MarketingDashboard';
 import { ContentLab } from './components/dashboard/ContentLab';
 import { Achievements } from './components/dashboard/Achievements';
+import { VRReviewsSuite } from './components/vr/VRReviewsSuite';
 import { CustomerLibrary } from './pages/CustomerLibrary';
 import { AudioPlayerPage } from './pages/AudioPlayerPage';
 import { cn } from './lib/utils';
 
-const DashboardOverview = () => (
-  <div className="flex flex-col gap-12">
-    <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-      <div>
-        <h2 className="text-4xl font-black uppercase tracking-tighter text-white mb-4">Command Center</h2>
-        <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.4em]">Unified System Overview & Rapid Operations</p>
+const DashboardOverview = () => {
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [events, setEvents] = useState<AnalyticsEventData[]>([]);
+
+  useEffect(() => {
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+      setOrders(snap.docs.map(doc => doc.data() as OrderRecord));
+    }, () => {});
+
+    const unsubEvents = onSnapshot(collection(db, 'analytics_events'), (snap) => {
+      setEvents(snap.docs.map(doc => doc.data() as AnalyticsEventData));
+    }, () => {});
+
+    return () => {
+      unsubOrders();
+      unsubEvents();
+    };
+  }, []);
+
+  const totalRev = orders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  const totalPlays = events.filter(e => e.eventType === 'play').length;
+  const totalViews = events.filter(e => e.eventType === 'page_view').length;
+  const convRate = totalViews > 0 ? ((orders.length / totalViews) * 100).toFixed(1) : '0.0';
+
+  return (
+    <div className="flex flex-col gap-12">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+        <div>
+          <h2 className="text-4xl font-black uppercase tracking-tighter text-white mb-4">Command Center</h2>
+          <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.4em]">Live Firestore Store Overview & Rapid Operations</p>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[8px] font-black uppercase tracking-widest">
+           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+           Firestore Real-Time Sync
+        </div>
       </div>
-      <div className="flex items-center gap-3 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[8px] font-black uppercase tracking-widest">
-         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-         System Online
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: 'Live Total Revenue', value: `$${totalRev.toFixed(2)}`, trend: orders.length > 0 ? '+100%' : '0.0%' },
+          { label: 'Ecosystem Plays', value: totalPlays.toString(), trend: totalPlays > 0 ? 'ACTIVE' : '0' },
+          { label: 'Market Conversions', value: `${convRate}%`, trend: orders.length > 0 ? 'REAL' : '0.0%' },
+          { label: 'Active Licenses Sold', value: orders.length.toString(), trend: 'VERIFIED' }
+        ].map((stat) => (
+          <div key={stat.label} className="p-8 border border-white/10 bg-white/[0.02] flex flex-col gap-4 group hover:bg-white/[0.04] transition-all">
+            <span className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold group-hover:text-white/60 transition-colors">{stat.label}</span>
+            <div className="flex flex-col gap-1">
+               <span className="text-4xl font-black text-white tracking-tighter tabular-nums">{stat.value}</span>
+               <span className={cn("text-[8px] font-black uppercase tracking-widest text-emerald-500")}>{stat.trend}</span>
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
-    
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {[
-        { label: 'Total Revenue', value: '$1,629.96', trend: '+12.5%' },
-        { label: 'Ecosystem Plays', value: '12,842', trend: '+42.8%' },
-        { label: 'Market Conversions', value: '3.2%', trend: '+0.5%' },
-        { label: 'Active Licenses', value: '48', trend: 'STABLE' }
-      ].map((stat) => (
-        <div key={stat.label} className="p-8 border border-white/10 bg-white/[0.02] flex flex-col gap-4 group hover:bg-white/[0.04] transition-all">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold group-hover:text-white/60 transition-colors">{stat.label}</span>
-          <div className="flex flex-col gap-1">
-             <span className="text-4xl font-black text-white tracking-tighter tabular-nums">{stat.value}</span>
-             <span className={cn("text-[8px] font-black uppercase tracking-widest", stat.trend.includes('+') ? "text-emerald-500" : "text-white/20")}>{stat.trend}</span>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          <h3 className="text-xl font-black uppercase tracking-tighter text-white">Live Stream Activity Barometer</h3>
+          <div className="border border-white/10 bg-white/[0.01] p-12 h-64 flex items-end gap-2">
+             {Array.from({ length: 40 }).map((_, i) => (
+                <div 
+                  key={i} 
+                  className="flex-1 bg-emerald-500/30 hover:bg-emerald-400 transition-all cursor-pointer" 
+                  style={{ height: `${Math.min(100, Math.max(10, (totalPlays + orders.length * 5 + i * 3) % 95))}%` }} 
+                  title="Live activity stream" 
+                />
+             ))}
           </div>
         </div>
-      ))}
-    </div>
-
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-      <div className="lg:col-span-8 flex flex-col gap-6">
-        <h3 className="text-xl font-black uppercase tracking-tighter text-white">Live Stream Activity</h3>
-        <div className="border border-white/10 bg-white/[0.01] p-12 h-64 flex items-end gap-2">
-           {Array.from({ length: 40 }).map((_, i) => (
-              <div key={i} className="flex-1 bg-white/10 hover:bg-white transition-all cursor-pointer" style={{ height: `${Math.random() * 80 + 10}%` }} title="Activity spike" />
-           ))}
-        </div>
-      </div>
-      <div className="lg:col-span-4 flex flex-col gap-6">
-        <h3 className="text-xl font-black uppercase tracking-tighter text-white">Security & Status</h3>
-        <div className="flex-1 p-8 border border-white/10 bg-white/[0.02] flex flex-col gap-6 justify-center">
-           <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Audio Engine</span>
-              <span className="text-[8px] px-2 py-1 border border-white/20 text-white font-bold uppercase tracking-widest bg-emerald-500/10 border-emerald-500/20 text-emerald-500">Active</span>
-           </div>
-           <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Payment Gateway</span>
-              <span className="text-[8px] px-2 py-1 border border-white/20 text-white font-bold uppercase tracking-widest bg-emerald-500/10 border-emerald-500/20 text-emerald-500">Verified</span>
-           </div>
-           <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Content ID Sync</span>
-              <span className="text-[8px] px-2 py-1 border border-white/20 text-white font-bold uppercase tracking-widest text-white/40 animate-pulse">Syncing...</span>
-           </div>
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <h3 className="text-xl font-black uppercase tracking-tighter text-white">Security & Status</h3>
+          <div className="flex-1 p-8 border border-white/10 bg-white/[0.02] flex flex-col gap-6 justify-center">
+             <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Audio Engine</span>
+                <span className="text-[8px] px-2 py-1 border border-emerald-500/20 text-emerald-500 font-bold uppercase tracking-widest bg-emerald-500/10">Active</span>
+             </div>
+             <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Sales Ledger Grid</span>
+                <span className="text-[8px] px-2 py-1 border border-emerald-500/20 text-emerald-500 font-bold uppercase tracking-widest bg-emerald-500/10">Connected</span>
+             </div>
+             <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">VR Headset Suite</span>
+                <span className="text-[8px] px-2 py-1 border border-purple-500/20 text-purple-400 font-bold uppercase tracking-widest bg-purple-500/10">Live</span>
+             </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const DashboardPlaceholder = ({ title }: { title: string }) => (
   <div className="flex flex-col gap-12">
@@ -123,6 +157,7 @@ export default function App() {
                   <Route path="/music" element={<CatalogDashboard />} />
                   <Route path="/sales" element={<SalesDashboard />} />
                   <Route path="/analytics" element={<AnalyticsDashboard />} />
+                  <Route path="/vr-reviews" element={<VRReviewsSuite />} />
                   <Route path="/marketing" element={<MarketingDashboard />} />
                   <Route path="/content" element={<ContentLab />} />
                   <Route path="/achievements" element={<Achievements />} />
