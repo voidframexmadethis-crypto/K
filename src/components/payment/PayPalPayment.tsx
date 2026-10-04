@@ -8,6 +8,130 @@ interface PayPalButtonProps {
   onError: (error: any) => void;
 }
 
+interface PayPalConfig {
+  clientId: string;
+  merchantEmail: string;
+  currency: string;
+}
+
+// Module-level singletons for instantaneous caching across modal opens
+let cachedConfigPromise: Promise<PayPalConfig> | null = null;
+let cachedConfig: PayPalConfig | null = null;
+let cachedSdkPromise: Promise<any> | null = null;
+
+export function fetchPayPalConfig(): Promise<PayPalConfig> {
+  if (cachedConfig) return Promise.resolve(cachedConfig);
+  if (cachedConfigPromise) return cachedConfigPromise;
+
+  cachedConfigPromise = fetch('/api/config/paypal')
+    .then(res => res.json())
+    .then(data => {
+      const rawId = data.clientId ? data.clientId.toString().trim() : '';
+      const email = data.merchantEmail || 'kraezelvbeatz@gmail.com';
+      const config: PayPalConfig = {
+        clientId: rawId || (import.meta.env.VITE_PAYPAL_CLIENT_ID || ''),
+        merchantEmail: email,
+        currency: data.currency || 'USD'
+      };
+      cachedConfig = config;
+      return config;
+    })
+    .catch(err => {
+      console.warn('[PAYPAL_DIAGNOSTIC] Backend config fetch note, using fallback:', err);
+      const config: PayPalConfig = {
+        clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
+        merchantEmail: 'kraezelvbeatz@gmail.com',
+        currency: 'USD'
+      };
+      cachedConfig = config;
+      return config;
+    });
+
+  return cachedConfigPromise;
+}
+
+export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  const win = window as any;
+  if (win.paypal && win.paypal.Buttons) {
+    return Promise.resolve(win.paypal);
+  }
+  if (cachedSdkPromise) {
+    return cachedSdkPromise;
+  }
+
+  cachedSdkPromise = fetchPayPalConfig().then(config => {
+    const sanitizedClientId = config.clientId.trim().replace(/^['"]|['"]$/g, '');
+    if (!sanitizedClientId) {
+      throw new Error('Missing PayPal Client ID');
+    }
+
+    if (win.paypal && win.paypal.Buttons) {
+      return win.paypal;
+    }
+
+    const scriptId = 'paypal-js-sdk-live-unique';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    return new Promise((resolve, reject) => {
+      const onScriptReady = () => {
+        const paypal = (window as any).paypal;
+        if (paypal && paypal.Buttons) {
+          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED');
+          resolve(paypal);
+        } else {
+          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons is undefined');
+          reject(new Error('PayPal SDK loaded but Buttons component is unavailable.'));
+        }
+      };
+
+      if (!script) {
+        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADING');
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://www.paypal.com/sdk/js?client-id=${sanitizedClientId}&currency=${currency}&intent=capture`;
+        script.async = true;
+        script.onload = () => {
+          script.setAttribute('data-status', 'loaded');
+          onScriptReady();
+        };
+        script.onerror = () => {
+          script.setAttribute('data-status', 'failed');
+          cachedSdkPromise = null;
+          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: Failed to fetch PayPal Live SDK script.');
+          reject(new Error('Failed to load Live PayPal payment network.'));
+        };
+        document.head.appendChild(script);
+      } else {
+        if (script.getAttribute('data-status') === 'loaded' && win.paypal?.Buttons) {
+          onScriptReady();
+        } else {
+          script.addEventListener('load', onScriptReady, { once: true });
+          script.addEventListener('error', () => {
+            cachedSdkPromise = null;
+            reject(new Error('Failed to load Live PayPal payment network.'));
+          }, { once: true });
+        }
+      }
+    });
+  });
+
+  return cachedSdkPromise;
+}
+
+// Background pre-warming on idle/startup without blocking execution
+if (typeof window !== 'undefined') {
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(() => {
+      preloadPayPalSdk().catch(() => {});
+    });
+  } else {
+    setTimeout(() => {
+      preloadPayPalSdk().catch(() => {});
+    }, 500);
+  }
+}
+
 export const PayPalPayment: React.FC<PayPalButtonProps> = ({
   amount,
   currency = 'USD',
@@ -17,72 +141,64 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [merchantEmail, setMerchantEmail] = useState<string>('kraezelvbeatz@gmail.com');
+  const [merchantEmail, setMerchantEmail] = useState<string>(cachedConfig?.merchantEmail || 'kraezelvbeatz@gmail.com');
   const [retryKey, setRetryKey] = useState(0);
+
   const buttonContainerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const renderedClientIdRef = useRef<string | null>(null);
 
-  // Fetch Live Client ID and merchant email securely from backend proxy
+  // Keep references to amount and description so createOrder & onApprove ALWAYS use the latest values
+  // without needing to destroy and recreate the PayPal button iframe every time license tier changes!
+  const amountRef = useRef(amount);
+  const descriptionRef = useRef(description);
+  const currencyRef = useRef(currency);
+
   useEffect(() => {
+    amountRef.current = amount;
+  }, [amount]);
+
+  useEffect(() => {
+    descriptionRef.current = description;
+  }, [description]);
+
+  useEffect(() => {
+    currencyRef.current = currency;
+  }, [currency]);
+
+  // Handle PayPal SDK Loading and Button Rendering
+  useEffect(() => {
+    let isCancelled = false;
     setLoadError(null);
     setIsLoaded(false);
-
-    fetch('/api/config/paypal')
-      .then(res => res.json())
-      .then(data => {
-        const rawId = data.clientId ? data.clientId.toString().trim() : '';
-        const email = data.merchantEmail || 'kraezelvbeatz@gmail.com';
-        
-        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_CLIENT_ID_PRESENT=${!!rawId}`);
-        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_HAS_SERVER_SECRET=${!!data.hasServerSecret}`);
-        setClientId(rawId || import.meta.env.VITE_PAYPAL_CLIENT_ID || '');
-        setMerchantEmail(email);
-      })
-      .catch(err => {
-        console.warn('[PAYPAL_DIAGNOSTIC] Backend config fetch note, using env fallback:', err);
-        setClientId(import.meta.env.VITE_PAYPAL_CLIENT_ID || '');
-        setMerchantEmail('kraezelvbeatz@gmail.com');
-      });
-  }, [retryKey]);
-
-  // Handle PayPal SDK Loading and Button Rendering cleanly without re-render loop
-  useEffect(() => {
-    if (!clientId) return;
-
-    console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADING');
-
-    const sanitizedClientId = clientId.trim().replace(/^['"]|['"]$/g, '');
 
     // Safety timeout
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      if (!isLoaded) {
+      if (!isLoaded && !isCancelled) {
         console.warn('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: PayPal SDK loading timed out after 12s');
         setLoadError('PayPal secure gateway failed to initialize in time.');
       }
     }, 12000);
 
-    const scriptId = 'paypal-js-sdk-live-unique';
-    let script = document.getElementById(scriptId) as HTMLScriptElement;
+    preloadPayPalSdk(currency)
+      .then(paypal => {
+        if (isCancelled || !buttonContainerRef.current) return;
 
-    const initializeButtons = () => {
-      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED');
-      const paypal = (window as any).paypal;
+        if (cachedConfig?.merchantEmail) {
+          setMerchantEmail(cachedConfig.merchantEmail);
+        }
 
-      const buttonsAvailable = !!(paypal && paypal.Buttons);
-      console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTONS_AVAILABLE=${buttonsAvailable}`);
+        const buttonsAvailable = !!(paypal && paypal.Buttons);
+        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTONS_AVAILABLE=${buttonsAvailable}`);
 
-      if (!buttonsAvailable) {
-        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons is undefined');
-        setLoadError('PayPal SDK loaded but Buttons component is unavailable.');
-        return;
-      }
+        if (!buttonsAvailable) {
+          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons is undefined');
+          setLoadError('PayPal SDK loaded but Buttons component is unavailable.');
+          return;
+        }
 
-      if (buttonContainerRef.current) {
         buttonContainerRef.current.innerHTML = '';
-        
+
         try {
           console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTON_INITIALIZED');
           const buttons = paypal.Buttons({
@@ -98,7 +214,11 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
                 const res = await fetch('/api/paypal/create-order', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ amount, currency, description })
+                  body: JSON.stringify({ 
+                    amount: amountRef.current, 
+                    currency: currencyRef.current, 
+                    description: descriptionRef.current 
+                  })
                 });
 
                 const orderRes = await res.json();
@@ -120,10 +240,10 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
                 console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Single-Party Client Order)');
                 return actions.order.create({
                   purchase_units: [{
-                    description: description,
+                    description: descriptionRef.current,
                     amount: {
-                      currency_code: currency,
-                      value: amount.toFixed(2).toString(),
+                      currency_code: currencyRef.current,
+                      value: amountRef.current.toFixed(2).toString(),
                     }
                   }]
                 });
@@ -147,7 +267,12 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
                 const captureRes = await fetch('/api/paypal/capture-order', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ orderID, amount, currency, description })
+                  body: JSON.stringify({ 
+                    orderID, 
+                    amount: amountRef.current, 
+                    currency: currencyRef.current, 
+                    description: descriptionRef.current 
+                  })
                 });
 
                 const verifiedResult = await captureRes.json();
@@ -193,68 +318,49 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
           console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_STARTED');
           buttons.render(buttonContainerRef.current)
             .then(() => {
+              if (isCancelled) return;
               console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_SUCCESS');
               setIsLoaded(true);
-              renderedClientIdRef.current = sanitizedClientId;
               if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);
                 timeoutRef.current = null;
               }
             })
             .catch((err: any) => {
+              if (isCancelled) return;
               console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_ERROR=${err?.message || err}`);
               console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED');
               setLoadError('Failed to render secure PayPal checkout interface.');
             });
         } catch (err: any) {
+          if (isCancelled) return;
           console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_ERROR=${err?.message || err}`);
           console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED');
           setLoadError('Failed to initialize PayPal checkout button.');
         }
-      }
-    };
-
-    const scriptUrl = `https://www.paypal.com/sdk/js?client-id=${sanitizedClientId}&currency=${currency}&intent=capture`;
-
-    if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = scriptUrl;
-      script.async = true;
-      script.onload = () => {
-        script.setAttribute('data-status', 'loaded');
-        initializeButtons();
-      };
-      script.onerror = () => {
-        script.setAttribute('data-status', 'failed');
-        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: Failed to fetch PayPal Live SDK script.');
-        setLoadError('Failed to load Live PayPal payment network.');
-      };
-      document.body.appendChild(script);
-    } else {
-      const paypal = (window as any).paypal;
-      if (paypal && paypal.Buttons) {
-        initializeButtons();
-      } else {
-        const handleScriptLoad = () => {
-          initializeButtons();
-        };
-        script.addEventListener('load', handleScriptLoad);
-        return () => {
-          script.removeEventListener('load', handleScriptLoad);
-        };
-      }
-    }
+      })
+      .catch(err => {
+        if (isCancelled) return;
+        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED:', err?.message || err);
+        setLoadError(err?.message || 'Failed to load PayPal checkout.');
+      });
 
     return () => {
+      isCancelled = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       if (buttonContainerRef.current) {
         buttonContainerRef.current.innerHTML = '';
       }
     };
-  }, [clientId, currency, amount, description, merchantEmail]);
+  }, [currency, retryKey]);
 
   const handleRetry = () => {
-    renderedClientIdRef.current = null;
+    cachedSdkPromise = null;
+    cachedConfigPromise = null;
+    cachedConfig = null;
     setRetryKey(prev => prev + 1);
   };
 
@@ -309,3 +415,4 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
 };
 
 export default PayPalPayment;
+

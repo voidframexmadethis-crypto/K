@@ -36,6 +36,7 @@ import { logAnalyticsEvent } from './services/analyticsService';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { cn } from './lib/utils';
+import { preloadPayPalSdk } from './components/payment/PayPalPayment';
 
 const DashboardOverview = () => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -143,6 +144,10 @@ const LogoutHandler = () => {
 function MainAppContent() {
   const location = useLocation();
   useBeatDeepLink();
+
+  useEffect(() => {
+    preloadPayPalSdk().catch(() => {});
+  }, []);
 
   useEffect(() => {
     // 1. Exclude owner traffic from visitor analytics

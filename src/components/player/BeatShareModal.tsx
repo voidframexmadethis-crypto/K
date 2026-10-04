@@ -26,10 +26,10 @@ export const BeatShareModal: React.FC<BeatShareModalProps> = ({
   isOpen,
   onClose
 }) => {
-  if (!isOpen || !beat) return null;
-
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+
+  if (!isOpen || !beat) return null;
 
   const shareUrl = `${window.location.origin}/?beat=${beat.id}`;
   const embedCode = `<iframe src="${window.location.origin}/?beat=${beat.id}" width="100%" height="166" frameborder="0" allow="autoplay; clipboard-write; encrypted-media"></iframe>`;

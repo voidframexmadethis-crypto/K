@@ -16,19 +16,15 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
   onClose,
   onDownloadSuccess
 }) => {
-  if (!isOpen || !beat) return null;
-
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const hiddenFormRef = useRef<HTMLFormElement | null>(null);
 
-  const currentSiteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  const currentBeatShareUrl = typeof window !== 'undefined' ? `${window.location.origin}/?beat=${beat.id}` : '';
-
   // Load official Beehiiv v3 script loader
   useEffect(() => {
+    if (!isOpen) return;
     const scriptId = 'beehiiv-v3-loader-script';
     let script = document.getElementById(scriptId) as HTMLScriptElement;
 
@@ -40,7 +36,12 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
       script.setAttribute('data-beehiiv-form', BEEHIIV_FORM_ID);
       document.body.appendChild(script);
     }
-  }, []);
+  }, [isOpen]);
+
+  if (!isOpen || !beat) return null;
+
+  const currentSiteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const currentBeatShareUrl = typeof window !== 'undefined' ? `${window.location.origin}/?beat=${beat.id}` : '';
 
   const handleDownloadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

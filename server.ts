@@ -75,6 +75,7 @@ async function startServer() {
 
   // API endpoint to serve public PayPal config securely from backend
   app.get('/api/config/paypal', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json({ 
       clientId: BACKEND_PAYPAL_CLIENT_ID,
       merchantEmail: BACKEND_PAYPAL_EMAIL,
@@ -329,6 +330,12 @@ async function startServer() {
     }
   });
 
+  // Vite middleware integration
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'spa'
+  });
+
   // Dynamic Server-Side Open Graph & Twitter Social Metadata Middleware for ?beat=BEAT_ID crawler requests
   app.use(async (req: Request, res: Response, next: NextFunction) => {
     const beatId = req.query.beat as string;
@@ -369,6 +376,9 @@ async function startServer() {
 
       const fullOgTitle = `${beatTitle} — ${producerName}`;
 
+      // Transform HTML with Vite to include client scripts & React Refresh preamble
+      html = await vite.transformIndexHtml(req.originalUrl || req.url, html);
+
       // Server-rendered Open Graph & Twitter Card tags
       const metaTagsHtml = `
         <title>${fullOgTitle}</title>
@@ -390,12 +400,6 @@ async function startServer() {
     } catch (e) {
       next();
     }
-  });
-
-  // Vite middleware integration
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa'
   });
 
   app.use(vite.middlewares);

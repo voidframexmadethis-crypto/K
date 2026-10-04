@@ -36,19 +36,20 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
   isOpen,
   onClose
 }) => {
-  if (!isOpen) return null;
-
   const [settings, setSettings] = useState<EngineerSettings>(() => hiFiAudioEngine.getSettings());
   const [meters, setMeters] = useState<MeterData>(() => hiFiAudioEngine.getMeterData());
   const [exportSuccess, setExportSuccess] = useState(false);
 
   // Poll live meters
   useEffect(() => {
+    if (!isOpen) return;
     const interval = setInterval(() => {
       setMeters(hiFiAudioEngine.getMeterData());
     }, 100);
     return () => clearInterval(interval);
-  }, []);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const handleModeSelect = (mode: MasteringMode) => {
     const updated = { ...settings, mode, isBypassed: mode === 'RAW' };

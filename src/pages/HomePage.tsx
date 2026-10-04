@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { HeroSpotlightCarousel } from '../components/home/HeroSpotlightCarousel';
 import { DiscoveryBar } from '../components/home/DiscoveryBar';
@@ -17,9 +17,9 @@ import { FreeDownloadModal } from '../components/beats/FreeDownloadModal';
 
 export const HomePage = () => {
   const { beats } = useBeatCatalogStore();
-  const [deepLinkBeat, setDeepLinkBeat] = React.useState<any>(null);
+  const [deepLinkBeat, setDeepLinkBeat] = useState<any>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handler = (e: any) => {
       setDeepLinkBeat(e.detail.beat);
     };
