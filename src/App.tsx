@@ -29,6 +29,7 @@ import { ProfileSettings } from './components/dashboard/ProfileSettings';
 import { ProducerProfilePage } from './pages/ProducerProfilePage';
 import { CustomerLibrary } from './pages/CustomerLibrary';
 import { AudioPlayerPage } from './pages/AudioPlayerPage';
+import { useBeatDeepLink } from './lib/useBeatDeepLink';
 import { cn } from './lib/utils';
 
 const DashboardOverview = () => {
@@ -133,50 +134,58 @@ const DashboardPlaceholder = ({ title }: { title: string }) => (
   </div>
 );
 
+function MainAppContent() {
+  useBeatDeepLink();
+
+  return (
+    <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black font-sans">
+      <MainHeader />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/beats" element={<BeatsPage />} />
+        <Route path="/collections" element={<CollectionsPage />} />
+        <Route path="/packs" element={<PacksPage />} />
+        <Route path="/free-beats" element={<FreeBeatsPage />} />
+        <Route path="/merch" element={<MerchPage />} />
+        <Route path="/videos" element={<VideosPage />} />
+        <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/profile" element={<ProducerProfilePage />} />
+        <Route path="/producer/*" element={<ProducerProfilePage />} />
+        <Route path="/audio-player" element={<AudioPlayerPage />} />
+        <Route path="/account" element={<CustomerLibrary />} />
+        <Route 
+          path="/dashboard/*" 
+          element={
+            <DashboardLayout>
+              <Routes>
+                <Route path="/" element={<DashboardOverview />} />
+                <Route path="/upload" element={<BeatUploader />} />
+                <Route path="/music" element={<CatalogDashboard />} />
+                <Route path="/remove-beats" element={<RemoveBeatsFromPlayer />} />
+                <Route path="/sales" element={<SalesDashboard />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
+                <Route path="/vr-reviews" element={<VRReviewsSuite />} />
+                <Route path="/marketing" element={<MarketingDashboard />} />
+                <Route path="/content" element={<ContentLab />} />
+                <Route path="/achievements" element={<Achievements />} />
+                <Route path="/settings" element={<ProfileSettings />} />
+                <Route path="*" element={<div className="py-20 text-center uppercase tracking-widest text-white/20">Module Under Construction</div>} />
+              </Routes>
+            </DashboardLayout>
+          } 
+        />
+      </Routes>
+      <PersistentPlayer />
+      <MassiveFooter />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black font-sans">
-        <MainHeader />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/beats" element={<BeatsPage />} />
-          <Route path="/collections" element={<CollectionsPage />} />
-          <Route path="/packs" element={<PacksPage />} />
-          <Route path="/free-beats" element={<FreeBeatsPage />} />
-          <Route path="/merch" element={<MerchPage />} />
-          <Route path="/videos" element={<VideosPage />} />
-          <Route path="/favorites" element={<FavoritesPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/profile" element={<ProducerProfilePage />} />
-          <Route path="/producer/*" element={<ProducerProfilePage />} />
-          <Route path="/audio-player" element={<AudioPlayerPage />} />
-          <Route path="/account" element={<CustomerLibrary />} />
-          <Route 
-            path="/dashboard/*" 
-            element={
-              <DashboardLayout>
-                <Routes>
-                  <Route path="/" element={<DashboardOverview />} />
-                  <Route path="/upload" element={<BeatUploader />} />
-                  <Route path="/music" element={<CatalogDashboard />} />
-                  <Route path="/remove-beats" element={<RemoveBeatsFromPlayer />} />
-                  <Route path="/sales" element={<SalesDashboard />} />
-                  <Route path="/analytics" element={<AnalyticsDashboard />} />
-                  <Route path="/vr-reviews" element={<VRReviewsSuite />} />
-                  <Route path="/marketing" element={<MarketingDashboard />} />
-                  <Route path="/content" element={<ContentLab />} />
-                  <Route path="/achievements" element={<Achievements />} />
-                  <Route path="/settings" element={<ProfileSettings />} />
-                  <Route path="*" element={<div className="py-20 text-center uppercase tracking-widest text-white/20">Module Under Construction</div>} />
-                </Routes>
-              </DashboardLayout>
-            } 
-          />
-        </Routes>
-        <PersistentPlayer />
-        <MassiveFooter />
-      </div>
+      <MainAppContent />
     </Router>
   );
 }

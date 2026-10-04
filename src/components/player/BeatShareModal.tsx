@@ -31,8 +31,24 @@ export const BeatShareModal: React.FC<BeatShareModalProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
 
-  const shareUrl = `${window.location.origin}/beat/${beat.slug || beat.id}`;
-  const embedCode = `<iframe src="${window.location.origin}/embed/beat/${beat.slug || beat.id}?theme=dark" width="100%" height="166" frameborder="0" allow="autoplay; clipboard-write; encrypted-media"></iframe>`;
+  const shareUrl = `${window.location.origin}/?beat=${beat.id}`;
+  const embedCode = `<iframe src="${window.location.origin}/?beat=${beat.id}" width="100%" height="166" frameborder="0" allow="autoplay; clipboard-write; encrypted-media"></iframe>`;
+
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${beat.title} — KRAEZELVbeatz`,
+          text: `Listen to "${beat.title}" by ${beat.producerId} on KRAEZELVbeatz Beat Store! 🔥`,
+          url: shareUrl,
+        });
+      } catch (e) {
+        console.warn('Native share cancelled or failed', e);
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -129,6 +145,15 @@ export const BeatShareModal: React.FC<BeatShareModalProps> = ({
               value={shareUrl}
               className="flex-1 bg-black border border-white/20 p-3 text-xs font-mono text-white outline-none selection:bg-purple-600"
             />
+            {typeof navigator !== 'undefined' && 'share' in navigator && (
+              <button
+                onClick={handleNativeShare}
+                className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shrink-0"
+                title="Share via Native Device Share Sheet"
+              >
+                <Share2 size={14} /> Share
+              </button>
+            )}
             <button
               onClick={handleCopyLink}
               className={`px-5 py-3 text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shrink-0 ${

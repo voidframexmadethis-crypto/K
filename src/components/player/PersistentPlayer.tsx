@@ -24,7 +24,7 @@ export const PersistentPlayer = () => {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isMasteringStudioOpen, setIsMasteringStudioOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('spotify_master_14lufs');
+  const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('streaming');
   const [showDspMenu, setShowDspMenu] = useState(false);
 
   useEffect(() => {
@@ -171,56 +171,22 @@ export const PersistentPlayer = () => {
                 <span>{currentBeat.bpm} BPM</span>
               </div>
 
-              {/* Master Audio DSP Badge */}
+              {/* Master Audio DSP Mode Indicator Badge */}
               <div className="relative flex items-center gap-1.5">
                 <button
-                  onClick={() => setShowDspMenu(!showDspMenu)}
-                  className="px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-emerald-500/20 border border-purple-500/30 text-purple-300 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 hover:border-purple-400 transition-all rounded-sm mt-0.5"
-                >
-                  <Sparkles size={10} className="text-purple-400" />
-                  {currentDspObject.badge}
-                </button>
-
-                <button
                   onClick={() => setIsMasteringStudioOpen(true)}
-                  className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 hover:bg-emerald-500/30 transition-all rounded-sm mt-0.5"
-                  title="Open Spotify -14 LUFS Mastering Studio"
+                  className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 transition-all rounded-sm mt-0.5 ${
+                    hiFiAudioEngine.getSettings().isBypassed || hiFiAudioEngine.getSettings().mode === 'RAW'
+                      ? 'bg-white/10 border-white/20 text-white/70 hover:bg-white/20'
+                      : hiFiAudioEngine.getSettings().mode === 'KNOCK'
+                      ? 'bg-purple-500/20 border-purple-500/40 text-purple-300 hover:bg-purple-500/30'
+                      : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                  }`}
+                  title="Open DSP Mastering Studio"
                 >
-                  <Sliders size={10} className="text-emerald-400" />
-                  Spotify Studio
+                  <Sliders size={10} className="shrink-0" />
+                  <span>DSP: {hiFiAudioEngine.getSettings().isBypassed ? 'RAW' : hiFiAudioEngine.getSettings().mode}</span>
                 </button>
-
-                {/* DSP Presets Selector Menu */}
-                {showDspMenu && (
-                  <div className="absolute left-0 bottom-full mb-2 w-72 bg-neutral-950 border border-white/20 p-3 shadow-2xl z-[220] flex flex-col gap-2">
-                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-purple-400 border-b border-white/10 pb-2">
-                      <span>Hi-Fi Audio DSP Processing Engine</span>
-                      <button 
-                        onClick={() => { setShowDspMenu(false); setIsMasteringStudioOpen(true); }}
-                        className="text-[8px] text-emerald-400 hover:underline"
-                      >
-                        Open Studio ⚙️
-                      </button>
-                    </div>
-                    {MASTER_PRESETS.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => handlePresetChange(p.id)}
-                        className={`p-2 border text-left text-[10px] font-bold transition-all flex flex-col gap-0.5 ${
-                          activeDspPreset === p.id 
-                            ? 'bg-purple-600 text-white border-purple-400' 
-                            : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span>{p.name}</span>
-                          <span className="text-[8px] font-mono opacity-80">{p.badge}</span>
-                        </div>
-                        <span className="text-[8px] opacity-60 font-normal">{p.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, 
-  Sparkles, 
   Sliders, 
-  Volume2, 
   Activity, 
   ShieldCheck, 
   CheckCircle2, 
   Zap, 
-  Cpu, 
   Flame, 
   Radio, 
   Disc, 
   Download,
-  Info
+  Power,
+  Volume2,
+  AlertTriangle,
+  Info,
+  Sparkles
 } from 'lucide-react';
-import { hiFiAudioEngine, MASTER_PRESETS, MasterPresetId } from '../../lib/hiFiAudioEngine';
+import { 
+  hiFiAudioEngine, 
+  MasteringMode, 
+  EngineerSettings, 
+  MeterData 
+} from '../../lib/hiFiAudioEngine';
 import { Beat } from '../../types';
 
 interface SpotifyMasteringStudioModalProps {
@@ -31,63 +37,34 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
 }) => {
   if (!isOpen) return null;
 
-  const [activePreset, setActivePreset] = useState<MasterPresetId>(hiFiAudioEngine.getCurrentPreset().id);
-  const [subGain, setSubGain] = useState(2.5);
-  const [lowMidGain, setLowMidGain] = useState(1.2);
-  const [airGain, setAirGain] = useState(3.8);
-  const [saturation, setSaturation] = useState(0.20);
-  const [truePeakCeiling, setTruePeakCeiling] = useState(-1.0);
-  const [liveLufs, setLiveLufs] = useState(-14.0);
-  const [livePeak, setLivePeak] = useState(-1.0);
+  const [settings, setSettings] = useState<EngineerSettings>(() => hiFiAudioEngine.getSettings());
+  const [meters, setMeters] = useState<MeterData>(() => hiFiAudioEngine.getMeterData());
   const [exportSuccess, setExportSuccess] = useState(false);
 
-  // Poll live LUFS meters
+  // Poll live meters
   useEffect(() => {
     const interval = setInterval(() => {
-      const readings = hiFiAudioEngine.getRmsLufsLevel();
-      setLiveLufs(readings.lufs);
-      setLivePeak(readings.truePeak);
-    }, 150);
+      setMeters(hiFiAudioEngine.getMeterData());
+    }, 100);
     return () => clearInterval(interval);
   }, []);
 
-  const handleSelectPreset = (presetId: MasterPresetId) => {
-    setActivePreset(presetId);
-    hiFiAudioEngine.applyPreset(presetId);
-    
-    const p = MASTER_PRESETS.find(item => item.id === presetId);
-    if (p) {
-      setSubGain(p.subGainDb);
-      setLowMidGain(p.lowMidGainDb);
-      setAirGain(p.airGainDb);
-      setSaturation(p.saturationDrive);
-      setTruePeakCeiling(p.truePeakCeilingDb);
-    }
+  const handleModeSelect = (mode: MasteringMode) => {
+    const updated = { ...settings, mode, isBypassed: false };
+    setSettings(updated);
+    hiFiAudioEngine.applySettings(updated);
   };
 
-  const handleSubChange = (val: number) => {
-    setSubGain(val);
-    hiFiAudioEngine.updateCustomParam('sub', val);
+  const handleToggleBypass = () => {
+    const updated = { ...settings, isBypassed: !settings.isBypassed };
+    setSettings(updated);
+    hiFiAudioEngine.applySettings(updated);
   };
 
-  const handleLowMidChange = (val: number) => {
-    setLowMidGain(val);
-    hiFiAudioEngine.updateCustomParam('lowMid', val);
-  };
-
-  const handleAirChange = (val: number) => {
-    setAirGain(val);
-    hiFiAudioEngine.updateCustomParam('air', val);
-  };
-
-  const handleSaturationChange = (val: number) => {
-    setSaturation(val);
-    hiFiAudioEngine.updateCustomParam('saturation', val);
-  };
-
-  const handleCeilingChange = (val: number) => {
-    setTruePeakCeiling(val);
-    hiFiAudioEngine.updateCustomParam('ceiling', val);
+  const handleParamChange = (key: keyof EngineerSettings, value: number) => {
+    const updated = { ...settings, [key]: value };
+    setSettings(updated);
+    hiFiAudioEngine.applySettings(updated);
   };
 
   const handleExportMaster = () => {
@@ -116,23 +93,34 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xl font-black uppercase text-white tracking-tight">
-                  Spotify Audio Mastering Suite
+                  Streaming Preview DSP Mastering Studio
                 </h3>
-                <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[8px] font-black uppercase">
-                  -14 LUFS / -1.0 dBFS
+                <span className={`px-2 py-0.5 border text-[8px] font-black uppercase ${
+                  settings.isBypassed ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' :
+                  settings.mode === 'STREAMING' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' :
+                  settings.mode === 'KNOCK' ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' :
+                  'bg-white/10 border-white/20 text-white/60'
+                }`}>
+                  {settings.isBypassed ? 'BYPASSED' : settings.mode}
                 </span>
               </div>
               <p className="text-[10px] font-mono text-white/40 uppercase tracking-wider">
-                Professional 32-Bit Float DSP Engine • True Peak Ceiling & Tube Harmonic Saturation
+                Original uploaded audio master remains 100% untouched for licensing & downloads.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1.5 rounded-sm">
-            <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-            <span className="text-[9px] font-mono text-emerald-300 uppercase tracking-widest font-bold">
-              Spotify Normalization Certified
-            </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleBypass}
+              className={`px-4 py-2 border text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${
+                settings.isBypassed 
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-300' 
+                  : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
+              }`}
+            >
+              <Power size={14} /> {settings.isBypassed ? 'Bypass Active' : 'Engage DSP'}
+            </button>
           </div>
         </div>
 
@@ -148,172 +136,226 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
             </div>
 
             <div className="text-right shrink-0">
-              <span className="text-[10px] font-mono uppercase text-emerald-400 block font-bold">Processing Target: -14.0 LUFS</span>
-              <span className="text-[9px] font-mono text-white/40 block">Ceiling: -1.0 dBFS True Peak</span>
+              <span className="text-[10px] font-mono uppercase text-emerald-400 block font-bold">
+                Target: {meters.targetLufs} LUFS
+              </span>
+              <span className="text-[9px] font-mono text-white/40 block">Untouched Source Master</span>
             </div>
           </div>
         )}
 
-        {/* Real-time Meters Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
-          {/* Integrated LUFS Meter */}
-          <div className="p-4 bg-black border border-white/10 rounded-sm space-y-3">
-            <div className="flex justify-between items-center text-xs font-mono">
-              <span className="text-white/60 uppercase font-bold flex items-center gap-1.5">
-                <Activity size={14} className="text-emerald-400" /> Integrated LUFS Loudness
-              </span>
-              <span className="text-emerald-400 font-bold">{liveLufs} LUFS</span>
-            </div>
-
-            <div className="h-4 bg-white/10 rounded-full overflow-hidden relative border border-white/10">
-              {/* Target Marker at -14 LUFS (approx 76% width) */}
-              <div className="absolute top-0 bottom-0 left-[76%] w-0.5 bg-emerald-400 z-10 shadow-[0_0_10px_#10b981]" title="Target -14 LUFS" />
-              <div 
-                className="h-full bg-gradient-to-r from-teal-500 via-emerald-400 to-amber-400 transition-all duration-150"
-                style={{ width: `${Math.min(100, Math.max(0, ((liveLufs + 60) / 60) * 100))}%` }}
-              />
-            </div>
-
-            <div className="flex justify-between text-[8px] font-mono text-white/30">
-              <span>-60 LUFS</span>
-              <span className="text-emerald-400 font-bold">-14 LUFS (Target)</span>
-              <span>0 LUFS</span>
-            </div>
-          </div>
-
-          {/* True Peak Meter */}
-          <div className="p-4 bg-black border border-white/10 rounded-sm space-y-3">
-            <div className="flex justify-between items-center text-xs font-mono">
-              <span className="text-white/60 uppercase font-bold flex items-center gap-1.5">
-                <Zap size={14} className="text-amber-400" /> True Peak Ceiling (-1.0 dBFS)
-              </span>
-              <span className={`font-bold ${livePeak >= -1.0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {livePeak} dBFS
-              </span>
-            </div>
-
-            <div className="h-4 bg-white/10 rounded-full overflow-hidden relative border border-white/10">
-              {/* Ceiling Line (-1.0 dBFS) */}
-              <div className="absolute top-0 bottom-0 right-[5%] w-0.5 bg-amber-400 z-10 shadow-[0_0_10px_#f59e0b]" title="Ceiling -1.0 dBFS" />
-              <div 
-                className={`h-full transition-all duration-150 ${
-                  livePeak >= -1.0 ? 'bg-amber-400' : 'bg-emerald-400'
-                }`}
-                style={{ width: `${Math.min(100, Math.max(0, ((livePeak + 60) / 60) * 100))}%` }}
-              />
-            </div>
-
-            <div className="flex justify-between text-[8px] font-mono text-white/30">
-              <span>-60 dBFS</span>
-              <span className="text-amber-400 font-bold">-1.0 dBFS (Ceiling)</span>
-              <span>0 dBFS</span>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Master Preset Selector */}
+        {/* THREE MASTERING MODES SELECTOR */}
         <div className="space-y-3">
           <label className="text-[10px] font-black uppercase tracking-widest text-white/60 block">
-            Select Mastering Profile
+            Select Preview Mode
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-            {MASTER_PRESETS.map(preset => (
-              <button
-                key={preset.id}
-                onClick={() => handleSelectPreset(preset.id)}
-                className={`p-3 text-left border rounded-sm transition-all flex flex-col justify-between gap-2 ${
-                  activePreset === preset.id 
-                    ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-lg' 
-                    : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <span className="text-[8px] font-black uppercase tracking-wider block">{preset.badge}</span>
-                <span className="text-[10px] font-bold uppercase truncate">{preset.name.split('(')[0]}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            
+            {/* 1. STREAMING MODE */}
+            <button
+              onClick={() => handleModeSelect('STREAMING')}
+              className={`p-4 border text-left rounded-sm transition-all flex flex-col justify-between gap-2 ${
+                settings.mode === 'STREAMING' && !settings.isBypassed
+                  ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-lg'
+                  : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-emerald-400">1. Streaming</span>
+                <span className="text-[8px] font-mono px-2 py-0.5 bg-emerald-500/20 text-emerald-300 uppercase">~ -14 LUFS</span>
+              </div>
+              <p className="text-[9px] text-white/70 leading-relaxed">
+                Optimized preview with transparent limiting, conservative harmonics, and preserved stereo transients.
+              </p>
+            </button>
+
+            {/* 2. KNOCK MODE */}
+            <button
+              onClick={() => handleModeSelect('KNOCK')}
+              className={`p-4 border text-left rounded-sm transition-all flex flex-col justify-between gap-2 ${
+                settings.mode === 'KNOCK' && !settings.isBypassed
+                  ? 'bg-purple-500/20 border-purple-500 text-white shadow-lg'
+                  : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-purple-400">2. Knock Mode</span>
+                <span className="text-[8px] font-mono px-2 py-0.5 bg-purple-500/20 text-purple-300 uppercase">Punchy 808</span>
+              </div>
+              <p className="text-[9px] text-white/70 leading-relaxed">
+                Punchy producer preview with 808 impact, strong kick transient, clear snare body, and exciting loudness.
+              </p>
+            </button>
+
+            {/* 3. RAW MODE */}
+            <button
+              onClick={() => handleModeSelect('RAW')}
+              className={`p-4 border text-left rounded-sm transition-all flex flex-col justify-between gap-2 ${
+                (settings.mode === 'RAW' || settings.isBypassed)
+                  ? 'bg-white/20 border-white text-white shadow-lg'
+                  : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-white">3. Raw Master</span>
+                <span className="text-[8px] font-mono px-2 py-0.5 bg-white/20 text-white uppercase">BYPASS</span>
+              </div>
+              <p className="text-[9px] text-white/70 leading-relaxed">
+                Completely bypasses DSP processing. Plays the original uploaded audio exactly as supplied.
+              </p>
+            </button>
+
           </div>
         </div>
 
-        {/* Engineer DSP Precision Sliders */}
+        {/* METERING DASHBOARD (Input LUFS, Output LUFS, Input Peak, Output Peak, GR) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 bg-black border border-white/10 rounded-sm">
+          
+          <div className="space-y-1">
+            <span className="text-[8px] font-mono uppercase text-white/40 block">Input LUFS</span>
+            <span className="text-sm font-black text-white font-mono">{meters.inputLufs}</span>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[8px] font-mono uppercase text-white/40 block">Output LUFS</span>
+            <span className="text-sm font-black text-emerald-400 font-mono">{meters.outputLufs}</span>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[8px] font-mono uppercase text-white/40 block">Input Peak</span>
+            <span className="text-sm font-black text-white/80 font-mono">{meters.inputPeakDb} dBFS</span>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[8px] font-mono uppercase text-white/40 block">Output Peak</span>
+            <span className={`text-sm font-black font-mono ${meters.isClipping ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+              {meters.outputPeakDb} dBFS
+            </span>
+          </div>
+
+          <div className="space-y-1 col-span-2 sm:col-span-1">
+            <span className="text-[8px] font-mono uppercase text-white/40 block">Limiter Gain Reduction</span>
+            <span className="text-sm font-black text-amber-400 font-mono">-{meters.gainReductionDb} dB</span>
+          </div>
+
+        </div>
+
+        {/* 808 PROTECTION NOTIFICATION BAR */}
+        {meters.hasSubOverload && settings.mode !== 'RAW' && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-center gap-2">
+            <AlertTriangle size={14} className="shrink-0" />
+            <span>Adaptive 808 Protection Active: Scaling down excessive low-end to prevent pumping & transient clipping.</span>
+          </div>
+        )}
+
+        {/* ENGINEER SLIDERS */}
         <div className="p-6 bg-black/60 border border-white/10 rounded-sm space-y-6">
           <h4 className="text-xs font-black uppercase text-emerald-400 tracking-widest flex items-center gap-2">
-            <Flame size={14} /> Engineer Multi-Band Saturation & EQ Sliders
+            <Flame size={14} /> Engineer Fine-Tuning Controls
           </h4>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* 1. Low-Mid Body Tube Saturation (200Hz - 500Hz) */}
+            {/* 1. Low-Mid Warmth */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">Low-Mid Tube Warmth (200Hz-500Hz)</span>
-                <span className="text-emerald-400 font-bold">+{lowMidGain.toFixed(1)} dB</span>
+                <span className="text-white/80 font-bold uppercase">Low-Mid Warmth (300Hz)</span>
+                <span className="text-emerald-400 font-bold">+{settings.lowMidWarmth.toFixed(1)} dB</span>
               </div>
               <input 
                 type="range" 
                 min="-6" 
                 max="6" 
                 step="0.1"
-                value={lowMidGain}
-                onChange={(e) => handleLowMidChange(parseFloat(e.target.value))}
+                value={settings.lowMidWarmth}
+                onChange={(e) => handleParamChange('lowMidWarmth', parseFloat(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
               />
-              <p className="text-[9px] text-white/40 font-mono">Adds 2nd-order analog warmth to body without muddying 808s.</p>
             </div>
 
-            {/* 2. High-End Air Exciter (>8kHz) */}
+            {/* 2. High-End Air */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">High-End Air Shimmer (&gt;8kHz)</span>
-                <span className="text-emerald-400 font-bold">+{airGain.toFixed(1)} dB</span>
+                <span className="text-white/80 font-bold uppercase">High-End Air (10kHz)</span>
+                <span className="text-emerald-400 font-bold">+{settings.highAir.toFixed(1)} dB</span>
               </div>
               <input 
                 type="range" 
                 min="0" 
                 max="8" 
                 step="0.1"
-                value={airGain}
-                onChange={(e) => handleAirChange(parseFloat(e.target.value))}
+                value={settings.highAir}
+                onChange={(e) => handleParamChange('highAir', parseFloat(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
               />
-              <p className="text-[9px] text-white/40 font-mono">Silky 3rd-order harmonic sheen for vocal & hi-hat shimmer.</p>
             </div>
 
-            {/* 3. Sub-Bass 808 Punch (60Hz) */}
+            {/* 3. 808 Sub Punch */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">808 Sub-Bass Punch (60Hz)</span>
-                <span className="text-emerald-400 font-bold">+{subGain.toFixed(1)} dB</span>
+                <span className="text-white/80 font-bold uppercase">808 Sub Punch (60Hz)</span>
+                <span className="text-emerald-400 font-bold">+{settings.subPunch808.toFixed(1)} dB</span>
               </div>
               <input 
                 type="range" 
-                min="0" 
+                min="-6" 
                 max="8" 
                 step="0.1"
-                value={subGain}
-                onChange={(e) => handleSubChange(parseFloat(e.target.value))}
+                value={settings.subPunch808}
+                onChange={(e) => handleParamChange('subPunch808', parseFloat(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
               />
-              <p className="text-[9px] text-white/40 font-mono">Unclipped low-end sub punch with 20Hz subsonic high-pass filter.</p>
             </div>
 
-            {/* 4. Total Harmonic Saturation Drive */}
+            {/* 4. Harmonic Saturation Drive */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">Harmonic Drive Amount</span>
-                <span className="text-emerald-400 font-bold">{(saturation * 100).toFixed(0)}%</span>
+                <span className="text-white/80 font-bold uppercase">Harmonic Drive</span>
+                <span className="text-emerald-400 font-bold">{(settings.harmonicDrive * 100).toFixed(0)}%</span>
               </div>
               <input 
                 type="range" 
                 min="0" 
                 max="1" 
                 step="0.05"
-                value={saturation}
-                onChange={(e) => handleSaturationChange(parseFloat(e.target.value))}
+                value={settings.harmonicDrive}
+                onChange={(e) => handleParamChange('harmonicDrive', parseFloat(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
               />
-              <p className="text-[9px] text-white/40 font-mono">Soft-clipping WaveShaper saturator for perceived loudness.</p>
+            </div>
+
+            {/* 5. Output Loudness */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-white/80 font-bold uppercase">Output Loudness Offset</span>
+                <span className="text-emerald-400 font-bold">{settings.outputLoudness > 0 ? '+' : ''}{settings.outputLoudness.toFixed(1)} dB</span>
+              </div>
+              <input 
+                type="range" 
+                min="-6" 
+                max="3" 
+                step="0.1"
+                value={settings.outputLoudness}
+                onChange={(e) => handleParamChange('outputLoudness', parseFloat(e.target.value))}
+                className="w-full accent-emerald-400 cursor-pointer"
+              />
+            </div>
+
+            {/* 6. Limiter Strength */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-white/80 font-bold uppercase">Limiter Response Strength</span>
+                <span className="text-emerald-400 font-bold">{(settings.limiterStrength * 100).toFixed(0)}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.05"
+                value={settings.limiterStrength}
+                onChange={(e) => handleParamChange('limiterStrength', parseFloat(e.target.value))}
+                className="w-full accent-emerald-400 cursor-pointer"
+              />
             </div>
 
           </div>
@@ -323,7 +365,7 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/10">
           <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
             <CheckCircle2 size={16} /> 
-            <span>Integrated LUFS Target (-14.0 LUFS) & Ceiling (-1.0 dBFS) Locked</span>
+            <span>Original Upload File Intact · Preview DSP Processing Active</span>
           </div>
 
           <button
@@ -331,7 +373,7 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
             className="w-full sm:w-auto px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95"
           >
             {exportSuccess ? <CheckCircle2 size={16} /> : <Download size={16} />}
-            {exportSuccess ? 'Master Profile Exported!' : 'Export Spotify Mastered Profile'}
+            {exportSuccess ? 'Settings Saved To Player!' : 'Save Mastering Settings'}
           </button>
         </div>
 
