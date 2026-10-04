@@ -1,41 +1,19 @@
-import React from 'react';
-import { Play, Heart, Share2, Download, ShoppingCart, Volume2, SkipBack, SkipForward, Maximize2, MoreHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Heart, Share2, Download, Volume2, SkipBack, SkipForward } from 'lucide-react';
 import { useAudioStore } from '../../store/useAudioStore';
+import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
 import { cn } from '../../lib/utils';
+import { LicensingModal } from '../beats/LicensingModal';
 
 export const MassiveHero = () => {
-  const artwork = '/src/assets/images/hero_valkyrie_massive_1791054144327.jpg';
+  const { beats } = useBeatCatalogStore();
+  const featuredBeat = beats.length > 0 ? beats[0] : null;
 
-  const featuredBeat = {
-    id: 'valkyrie-massive',
-    title: 'VALKYRIE',
-    producerId: 'KRAEZELV',
-    bpm: 144,
-    key: 'C MINOR',
-    genre: 'DARK TRAP',
-    tags: ['AGGRESSIVE', 'CINEMATIC', 'HARD'],
-    moods: ['DARK'],
-    slug: 'valkyrie',
-    isPrivate: false,
-    isBootleg: false,
-    instruments: [],
-    audioUrl: '', 
-    artworkUrl: artwork,
-    isFree: false,
-    licenses: { 
-      basic: { price: 29.99, enabled: true }, 
-      premium: { price: 49.99, enabled: true }, 
-      unlimited: { price: 99.99, enabled: true }, 
-      exclusive: { price: 499.99, enabled: true } 
-    },
-    createdAt: new Date().toISOString(),
-    published: true
-  };
+  const { setBeat, currentBeat, isPlaying, togglePlay, progress, duration } = useAudioStore();
+  const isCurrent = currentBeat?.id === featuredBeat?.id;
+  const [isLicensingOpen, setIsLicensingOpen] = useState(false);
 
-  const { setBeat, currentBeat, isPlaying, togglePlay, progress, duration, setProgress, volume, setVolume } = useAudioStore();
-  const isCurrent = currentBeat?.id === featuredBeat.id;
-
-  const heroImg = '/src/assets/images/hero_valkyrie_massive_1791054144327.jpg';
+  if (!featuredBeat) return null;
 
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -47,7 +25,7 @@ export const MassiveHero = () => {
     <section className="relative w-full min-h-[100vh] flex flex-col justify-center items-center overflow-hidden pt-20">
       {/* Background Layering */}
       <div className="absolute inset-0 z-0">
-        <img src={heroImg} className="w-full h-full object-cover scale-110 blur-[1px] brightness-[0.3]" alt="Background" />
+        <img src={featuredBeat.artworkUrl || undefined} className="w-full h-full object-cover scale-110 blur-[1px] brightness-[0.3]" alt="Background" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_100%)]" />
       </div>
@@ -89,14 +67,23 @@ export const MassiveHero = () => {
               >
                 <Play size={20} fill="black" className="group-hover:scale-110 transition-transform" /> Start Experience
               </button>
-              <button className="px-12 py-8 border border-white/20 text-white font-black uppercase tracking-[0.4em] text-xs hover:bg-white hover:text-black transition-all active:scale-95">
-                License — $29.99
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('1. BUY BEAT CLICKED');
+                  console.log('2. Parent navigation prevented');
+                  setIsLicensingOpen(true);
+                }}
+                className="px-12 py-8 border border-white/20 text-white font-black uppercase tracking-[0.4em] text-xs hover:bg-white hover:text-black transition-all active:scale-95"
+              >
+                License — ${featuredBeat.licenses.basic.price.toFixed(2)}
               </button>
             </div>
 
             <div className="flex items-center gap-10">
               <button className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors">
-                <Heart size={16} /> 2.4k Favorites
+                <Heart size={16} /> Favorites
               </button>
               <button className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors">
                 <Share2 size={16} /> Share Experience
@@ -111,7 +98,7 @@ export const MassiveHero = () => {
         {/* Right: Integrated Massive Player */}
         <div className="lg:col-span-6 flex flex-col gap-8 h-full justify-center">
           <div className="relative group aspect-square lg:aspect-auto lg:h-[600px] w-full bg-black border border-white/5 overflow-hidden shadow-[0_0_100px_rgba(255,255,255,0.02)]">
-            <img src={artwork} className="absolute inset-0 w-full h-full object-cover grayscale opacity-40 group-hover:opacity-60 transition-opacity duration-1000" alt="Artwork" />
+            <img src={featuredBeat.artworkUrl || ''} className="absolute inset-0 w-full h-full object-cover grayscale opacity-40 group-hover:opacity-60 transition-opacity duration-1000" alt="Artwork" />
             
             {/* Visualizer Simulation */}
             <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black to-transparent flex items-end px-12 pb-12 gap-1">
@@ -149,12 +136,6 @@ export const MassiveHero = () => {
                  <button className="text-white/40 hover:text-white transition-colors"><SkipForward size={32} /></button>
                </div>
             </div>
-
-            {/* Metadata Overlay */}
-            <div className="absolute top-12 right-12 flex flex-col items-end gap-2 text-right">
-               <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Next in Queue</span>
-               <span className="text-xs text-white/40 uppercase tracking-[0.2em]">Stars | Southside Type...</span>
-            </div>
           </div>
 
           {/* Player Progress Sub-Bar */}
@@ -168,17 +149,6 @@ export const MassiveHero = () => {
                 className="absolute top-0 left-0 h-full bg-white transition-all duration-100" 
                 style={{ width: `${(progress / duration) * 100}%` }}
               />
-              <input 
-                type="range"
-                min={0}
-                max={duration || 100}
-                value={progress}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  // Logic to seek would be here
-                }}
-                className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-              />
             </div>
           </div>
         </div>
@@ -189,6 +159,12 @@ export const MassiveHero = () => {
          <div className="w-px h-12 bg-gradient-to-b from-transparent to-white/40" />
          <span className="text-[8px] font-bold uppercase tracking-[0.6em] text-white/20">Explore Ecosystem</span>
       </div>
+
+      <LicensingModal 
+        beat={featuredBeat}
+        isOpen={isLicensingOpen}
+        onClose={() => setIsLicensingOpen(false)}
+      />
     </section>
   );
 };

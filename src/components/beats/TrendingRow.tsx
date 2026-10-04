@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Heart, ShoppingCart, TrendingUp } from 'lucide-react';
 import { Beat } from '../../types';
 import { useAudioStore } from '../../store/useAudioStore';
 import { cn } from '../../lib/utils';
+import { LicensingModal } from './LicensingModal';
 
 export const TrendingRow = ({ beat, rank }: { beat: Beat, rank: number }) => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const isCurrent = currentBeat?.id === beat.id;
+  const [isLicensingOpen, setIsLicensingOpen] = useState(false);
 
   return (
     <div className="group flex items-center gap-8 py-8 border-b border-white/5 hover:bg-white/[0.01] transition-colors px-4 -mx-4 relative overflow-hidden">
@@ -64,7 +66,16 @@ export const TrendingRow = ({ beat, rank }: { beat: Beat, rank: number }) => {
       {/* Actions */}
       <div className="flex items-center gap-4 shrink-0">
          <button className="p-3 text-white/20 hover:text-white transition-colors"><Heart size={18} /></button>
-         <button className="px-6 py-3 bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.3em] hover:bg-white hover:text-black transition-all">
+         <button 
+           onClick={(e) => {
+             e.preventDefault();
+             e.stopPropagation();
+             console.log('1. BUY BEAT CLICKED');
+             console.log('2. Parent navigation prevented');
+             setIsLicensingOpen(true);
+           }}
+           className="px-6 py-3 bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.3em] hover:bg-white hover:text-black transition-all"
+         >
            Buy ${beat.licenses.basic.price}
          </button>
       </div>
@@ -77,6 +88,12 @@ export const TrendingRow = ({ beat, rank }: { beat: Beat, rank: number }) => {
             ))}
          </div>
       </div>
+
+      <LicensingModal 
+        beat={beat}
+        isOpen={isLicensingOpen}
+        onClose={() => setIsLicensingOpen(false)}
+      />
     </div>
   );
 };

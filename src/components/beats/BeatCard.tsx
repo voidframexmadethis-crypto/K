@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, ShoppingCart, Heart, Share2 } from 'lucide-react';
 import { Beat } from '../../types';
 import { useAudioStore } from '../../store/useAudioStore';
+import { LicensingModal } from './LicensingModal';
 
 export const BeatCard = ({ beat }: { beat: Beat }) => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const isCurrent = currentBeat?.id === beat.id;
+  const [isLicensingOpen, setIsLicensingOpen] = useState(false);
 
   return (
     <div className="group flex flex-col gap-5">
@@ -58,10 +60,25 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
             {beat.genre} · {beat.key}
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all">
+        <button 
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('1. BUY BEAT CLICKED');
+            console.log('2. Parent navigation prevented');
+            setIsLicensingOpen(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all"
+        >
            <ShoppingCart size={14} /> ${beat.licenses.basic.price}
         </button>
       </div>
+
+      <LicensingModal 
+        beat={beat}
+        isOpen={isLicensingOpen}
+        onClose={() => setIsLicensingOpen(false)}
+      />
     </div>
   );
 };

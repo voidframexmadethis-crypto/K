@@ -1,27 +1,12 @@
 import React, { useState } from 'react';
-import { Search, Filter, Plus, Edit3, Archive, Globe, Lock, CheckCircle2, AlertTriangle, ChevronDown, DollarSign, Tag, Music, Layers, Trash2, X, Play } from 'lucide-react';
+import { Search, Filter, Plus, Edit3, Archive, Globe, Lock, CheckCircle2, AlertTriangle, ChevronDown, DollarSign, Tag, Music, Layers, Trash2, X, Play, Upload } from 'lucide-react';
 import { Beat } from '../../types';
 import { cn } from '../../lib/utils';
-
-const demoBeats: Beat[] = [
-  {
-    id: 'b1', title: 'APOLLO', producerId: 'KRAEZELV', bpm: 140, key: 'D Minor', genre: 'Trap', 
-    artworkUrl: '/src/assets/images/beat_artwork_abstract_1791053624368.jpg', audioUrl: 'master.mp3', isFree: false, 
-    tags: ['hard', 'trap'], moods: ['Dark'], slug: 'apollo', isPrivate: false, isBootleg: false, instruments: ['808', 'Piano'],
-    licenses: { basic: { price: 29.99, enabled: true }, premium: { price: 49.99, enabled: true }, unlimited: { price: 99.99, enabled: true }, exclusive: { price: 499.99, enabled: true } },
-    createdAt: '2026-10-01', published: true
-  },
-  {
-    id: 'b2', title: 'NIGHTFALL', producerId: 'KRAEZELV', bpm: 128, key: 'A Minor', genre: 'Dark Trap', 
-    artworkUrl: '/src/assets/images/beat_artwork_abstract_1791053624368.jpg', audioUrl: 'master.mp3', isFree: true,
-    tags: ['moody'], moods: ['Sad'], slug: 'nightfall', isPrivate: false, isBootleg: false, instruments: ['Guitar'],
-    licenses: { basic: { price: 29.99, enabled: true }, premium: { price: 49.99, enabled: true }, unlimited: { price: 99.99, enabled: true }, exclusive: { price: 499.99, enabled: true } },
-    createdAt: '2026-09-28', published: true
-  },
-];
+import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
+import { Link } from 'react-router-dom';
 
 export const CatalogDashboard = () => {
-  const [beats, setBeats] = useState<Beat[]>(demoBeats);
+  const { beats, removeBeat } = useBeatCatalogStore();
   const [search, setSearch] = useState('');
   const [selectedBeats, setSelectedBeats] = useState<string[]>([]);
   const [isBulkEditing, setIsBulkEditing] = useState(false);
@@ -37,16 +22,12 @@ export const CatalogDashboard = () => {
   };
 
   const handleBulkArchive = () => {
-    setBeats(prev => prev.map(b => selectedBeats.includes(b.id) ? { ...b, published: false } : b));
+    selectedBeats.forEach(id => removeBeat(id));
     setSelectedBeats([]);
   };
 
   const handleBulkPriceEdit = (price: number) => {
-     setBeats(prev => prev.map(b => selectedBeats.includes(b.id) ? { 
-        ...b, 
-        licenses: { ...b.licenses, basic: { ...b.licenses.basic, price } } 
-     } : b));
-     setIsBulkEditing(false);
+    setIsBulkEditing(false);
   };
 
   return (

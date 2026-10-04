@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { X, Check, ShoppingBag, ShieldCheck, FileText, Music, Sparkles } from 'lucide-react';
 import { Beat } from '../../types';
 import { cn } from '../../lib/utils';
+import { PayPalPayment } from '../payment/PayPalPayment';
 
 interface LicensingModalProps {
   beat: Beat | null;
   isOpen: boolean;
   onClose: () => void;
 }
-
 export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, onClose }) => {
   const [selectedTier, setSelectedTier] = useState<'basic' | 'premium' | 'unlimited' | 'exclusive'>('basic');
   const [added, setAdded] = useState(false);
@@ -181,29 +181,20 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
               </div>
             </div>
 
-            <div className="mt-8 space-y-3">
-              <button 
-                onClick={handleAddToCart}
-                className={cn(
-                  "w-full py-5 font-black uppercase tracking-[0.4em] text-xs transition-all duration-300 flex items-center justify-center gap-3",
-                  added 
-                    ? "bg-emerald-500 text-black" 
-                    : "bg-white text-black hover:bg-neutral-200 shadow-2xl"
-                )}
-              >
-                {added ? (
-                  <>
-                    <Check size={16} /> Added To Basket!
-                  </>
-                ) : (
-                  <>
-                    <ShoppingBag size={16} /> Add To Basket — ${activeOption.price.toFixed(2)}
-                  </>
-                )}
-              </button>
-              <p className="text-[8px] font-bold uppercase tracking-widest text-center text-white/30">
-                100% Secure Checkout · Instant Commercial Rights PDF
-              </p>
+            <div className="mt-8">
+              <PayPalPayment 
+                amount={activeOption.price}
+                currency="USD"
+                description={`${activeOption.name} - ${beat.title}`}
+                onSuccess={(details) => {
+                  console.log('Payment Successful:', details);
+                  alert(`Thank you! Your purchase of "${beat.title}" was successful.`);
+                  onClose();
+                }}
+                onError={(err) => {
+                  console.error('Payment Error:', err);
+                }}
+              />
             </div>
           </div>
         </div>

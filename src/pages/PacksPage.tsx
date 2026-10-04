@@ -1,11 +1,10 @@
 import React from 'react';
 import { SectionHeader } from '../components/home/SectionHeader';
+import { Layers, Upload } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const PacksPage = () => {
-  const packs = [
-    { title: 'Genesis Bundle', price: '$99', image: '/src/assets/images/pack_artwork_geometric_1791053633249.jpg' },
-    { title: 'Dark Horizons', price: '$79', image: '/src/assets/images/trap_collection_tile_1791054153805.jpg' },
-  ];
+  const packs: any[] = [];
 
   return (
     <div className="pt-32 pb-40 px-6 md:px-12 max-w-[1800px] mx-auto min-h-screen">
@@ -14,25 +13,24 @@ export const PacksPage = () => {
         title="Beat Packs"
       />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-        {packs.map((pack) => (
-          <div key={pack.title} className="group flex flex-col gap-8 cursor-pointer">
-            <div className="relative aspect-video bg-neutral-900 border border-white/5 overflow-hidden">
-              <img src={pack.image} className="w-full h-full object-cover grayscale opacity-60 group-hover:opacity-100 transition-all duration-1000" alt={pack.title} />
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <button className="px-10 py-5 bg-white text-black font-black uppercase tracking-[0.4em] text-[10px]">Preview Bundle</button>
-              </div>
-            </div>
-            <div className="flex justify-between items-end">
-              <div className="flex flex-col gap-2">
-                <h3 className="text-4xl font-black text-white uppercase tracking-tighter">{pack.title}</h3>
-                <span className="text-xs font-bold uppercase tracking-[0.3em] text-white/40">Multi-Track WAV + MIDI</span>
-              </div>
-              <span className="text-4xl font-black text-white/60">{pack.price}</span>
-            </div>
+      {packs.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          {/* Packs list when populated */}
+        </div>
+      ) : (
+        <div className="p-16 bg-neutral-950 border border-white/10 text-center flex flex-col items-center justify-center gap-6 max-w-2xl mx-auto">
+          <Layers size={40} className="text-white/20" />
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black uppercase text-white tracking-tight">NO BEAT PACKS CREATED YET</h3>
+            <p className="text-white/40 uppercase tracking-widest text-xs leading-relaxed">
+              You are the exclusive producer for KRAEZELVbeatz. Create beat packs and stem bundles in the Producer Dashboard to publish them here.
+            </p>
           </div>
-        ))}
-      </div>
+          <Link to="/dashboard" className="px-10 py-5 bg-white text-black text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 hover:bg-neutral-200 transition-colors">
+            <Upload size={14} /> Open Producer Dashboard
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

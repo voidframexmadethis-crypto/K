@@ -1,12 +1,10 @@
 import React from 'react';
 import { SectionHeader } from '../components/home/SectionHeader';
+import { ShoppingBag, Upload } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const MerchPage = () => {
-  const products = [
-    { name: 'KV-01 Studio Hoodie', price: '$85.00', thumb: '/src/assets/images/merch_streetwear_luxury_1791053642631.jpg' },
-    { name: 'Reference Headphones', price: '$299.00', thumb: '/src/assets/images/merch_headphones_premium_1791054164283.jpg' },
-    { name: 'KRAEZELV Oversized Tee', price: '$45.00', thumb: '/src/assets/images/merch_streetwear_luxury_1791053642631.jpg' },
-  ];
+  const products: any[] = [];
 
   return (
     <div className="pt-32 pb-40 px-6 md:px-12 max-w-[1800px] mx-auto min-h-screen">
@@ -15,26 +13,24 @@ export const MerchPage = () => {
         title="Merchandise"
       />
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-        {products.map((p) => (
-          <div key={p.name} className="group flex flex-col gap-8 cursor-pointer">
-            <div className="relative aspect-square bg-[#0a0a0a] border border-white/5 flex items-center justify-center overflow-hidden">
-               <img src={p.thumb} className="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-1000" alt={p.name} />
-               <button className="absolute bottom-8 left-8 right-8 py-5 bg-white text-black font-black uppercase tracking-[0.4em] text-[8px] opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 shadow-2xl">
-                 Add to Cart
-               </button>
-            </div>
-            
-            <div className="flex justify-between items-start">
-               <div className="flex flex-col gap-2">
-                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{p.name}</h3>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40">Premium Apparel Line</span>
-               </div>
-               <span className="text-xl font-black text-white/60">{p.price}</span>
-            </div>
+      {products.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          {/* Products when available */}
+        </div>
+      ) : (
+        <div className="p-16 bg-neutral-950 border border-white/10 text-center flex flex-col items-center justify-center gap-6 max-w-2xl mx-auto">
+          <ShoppingBag size={40} className="text-white/20" />
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black uppercase text-white tracking-tight">NO MERCH PRODUCTS ADDED YET</h3>
+            <p className="text-white/40 uppercase tracking-widest text-xs leading-relaxed">
+              KRAEZELVbeatz apparel, physical items, and studio merchandise will appear here once configured in the dashboard.
+            </p>
           </div>
-        ))}
-      </div>
+          <Link to="/dashboard" className="px-10 py-5 bg-white text-black text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 hover:bg-neutral-200 transition-colors">
+            <Upload size={14} /> Open Producer Dashboard
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

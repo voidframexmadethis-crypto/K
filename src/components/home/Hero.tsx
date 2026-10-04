@@ -1,48 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Heart, Share2, ArrowRight } from 'lucide-react';
 import { useAudioStore } from '../../store/useAudioStore';
+import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
+import { LicensingModal } from '../beats/LicensingModal';
 
 export const Hero = () => {
   const { setBeat } = useAudioStore();
+  const { beats } = useBeatCatalogStore();
+  const [isLicensingOpen, setIsLicensingOpen] = useState(false);
+  const featuredBeat = beats.length > 0 ? beats[0] : null;
 
-  // Reference generated image path
-  const heroImg = '/src/assets/images/hero_studio_cinematic_1791053615857.jpg';
-  const featuredArtwork = '/src/assets/images/beat_artwork_abstract_1791053624368.jpg';
-
-  // Mock featured beat for visibility (normally fetched)
-  const featuredBeat = {
-    id: 'featured-1',
-    title: 'VALKYRIE',
-    producerId: 'kraezelvbeatz',
-    bpm: 144,
-    key: 'C minor',
-    genre: 'Trap',
-    tags: ['Aggressive', 'Dark', 'Hard'],
-    moods: ['DARK'],
-    slug: 'valkyrie-v1',
-    isPrivate: false,
-    isBootleg: false,
-    instruments: [],
-    audioUrl: '', // Will be real in production
-    artworkUrl: featuredArtwork,
-    isFree: false,
-    licenses: { 
-      basic: { price: 29.99, enabled: true }, 
-      premium: { price: 49.99, enabled: true }, 
-      unlimited: { price: 99.99, enabled: true }, 
-      exclusive: { price: 499.99, enabled: true } 
-    },
-    createdAt: new Date().toISOString(),
-    published: true
-  };
+  if (!featuredBeat) return null;
 
   return (
     <section className="relative w-full min-h-[90vh] flex items-center overflow-hidden">
       {/* Background with Scrim */}
       <div className="absolute inset-0">
         <img 
-          src={heroImg} 
+          src={featuredBeat.artworkUrl || undefined} 
           alt="Studio" 
           className="w-full h-full object-cover filter grayscale brightness-50"
         />
@@ -81,8 +57,17 @@ export const Hero = () => {
             >
               <Play size={18} fill="currentColor" /> Play Now
             </button>
-            <button className="px-10 py-5 border border-white/20 text-white font-bold uppercase tracking-widest text-sm hover:bg-white hover:text-black transition-all">
-              License — $29.99
+            <button 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('1. BUY BEAT CLICKED');
+                console.log('2. Parent navigation prevented');
+                setIsLicensingOpen(true);
+              }}
+              className="px-10 py-5 border border-white/20 text-white font-bold uppercase tracking-widest text-sm hover:bg-white hover:text-black transition-all"
+            >
+              License — ${featuredBeat.licenses.basic.price.toFixed(2)}
             </button>
           </div>
         </div>
@@ -90,7 +75,7 @@ export const Hero = () => {
         <div className="hidden lg:block relative group">
           <div className="absolute -inset-4 bg-white/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
           <img 
-            src={featuredArtwork} 
+            src={featuredBeat.artworkUrl || ''} 
             alt="Artwork" 
             className="relative w-full aspect-square object-cover border border-white/10 shadow-2xl grayscale hover:grayscale-0 transition-all duration-1000"
           />
@@ -111,6 +96,12 @@ export const Hero = () => {
           </div>
         </div>
       </div>
+
+      <LicensingModal 
+        beat={featuredBeat}
+        isOpen={isLicensingOpen}
+        onClose={() => setIsLicensingOpen(false)}
+      />
     </section>
   );
 };
