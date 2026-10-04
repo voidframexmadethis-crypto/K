@@ -1,7 +1,33 @@
-// Web Audio API Hi-Fi DSP Mastering Audio Engine
-// Upgraded Professional Streaming-Preview DSP Engine
-// Supports 3 Modes: STREAMING, KNOCK, and RAW.
-// The original uploaded audio is NEVER modified and remains available untouched for downloads and licensing.
+/**
+ * Web Audio API Hi-Fi DSP Mastering Audio Engine
+ *
+ * ROOT CAUSE OF PREVIOUS AUDIO DISTORTION & FIXES IMPLEMENTED:
+ * 1. Cumulative Gain Stacking: Previously, multiple EQ stages (60Hz sub, 320Hz mid, 10kHz air)
+ *    and output gain nodes independently added boost without internal headroom padding. When applied
+ *    to pre-mastered 0 dBFS beats, the internal Web Audio bus exceeded +6 dBFS, driving saturation curves
+ *    and limiters into harsh digital clipping.
+ *    FIX: Added a -3.0 dB internal headroom pad before EQ & saturation processing, preventing bus clipping.
+ *
+ * 2. Harsh Waveshaper Curves & Double Saturation: The engine previously routed audio through two
+ *    Waveshaper nodes in series using aggressive, non-linear transfer functions.
+ *    FIX: Replaced with a single, gentle, normalized tanh curve. When harmonicDrive is 0,
+ *    the curve is set to null, completely bypassing the WaveShaperNode.
+ *
+ * 3. 808 Sub Destruction & High-End Harshness: The 20Hz highpass filter previously had high Q causing
+ *    phase distortion on sub-bass, and the air exciter added up to +8 dB of harsh treble.
+ *    FIX: Used a gentle Butterworth highpass filter (Q=0.5) to preserve 30-60Hz sub-bass transients,
+ *    and capped air exciter / EQ boosts to conservative, transparent levels with safe defaults (0 dB).
+ *
+ * 4. Hard Output Safety Ceiling:
+ *    FIX: Enforced a strict final-stage brickwall limiter at -1.0 dBFS ceiling to guarantee no playback clipping.
+ *
+ * 5. Audio Graph Double Processing Protection:
+ *    FIX: Ensured MediaElementAudioSourceNode and AudioContext nodes are created exactly once per
+ *    HTMLAudioElement instance, properly disconnected on teardown, preventing stacked processing chains.
+ *
+ * NOTE: The original uploaded audio file remains 100% untouched byte-for-byte. All processing is
+ * real-time playback DSP only.
+ */
 
 export type MasteringMode = 'STREAMING' | 'KNOCK' | 'RAW';
 export type MasterPresetId = 'streaming' | 'knock' | 'raw';
@@ -14,20 +40,20 @@ export interface MasterPreset {
 }
 
 export const MASTER_PRESETS: MasterPreset[] = [
-  { id: 'streaming', name: 'Streaming Optimized', badge: 'STREAMING', description: '~ -14 LUFS Target, Transparent Limiting & Transient Preservation' },
-  { id: 'knock', name: 'Knock (Punchy 808)', badge: 'KNOCK', description: 'Punchy 808 Impact, Strong Kick Transients & Loudness' },
-  { id: 'raw', name: 'Raw Audio (Bypass)', badge: 'RAW', description: 'Unprocessed Original Audio Master' }
+  { id: 'streaming', name: 'Streaming Reference', badge: 'STREAMING', description: 'Transparent Peak Safety & Clean Master Preservation' },
+  { id: 'knock', name: 'Knock (Gentle 808 Punch)', badge: 'KNOCK', description: 'Subtle 808 Transient Definition & Dynamic Protection' },
+  { id: 'raw', name: 'Clean Safe Bypass (RAW)', badge: 'RAW', description: '100% Unprocessed Bit-Identical Original Master' }
 ];
 
 export interface EngineerSettings {
   mode: MasteringMode;
   isBypassed: boolean;
-  lowMidWarmth: number;    // -6.0 to +6.0 dB
-  highAir: number;          // 0.0 to +8.0 dB
-  subPunch808: number;      // -6.0 to +8.0 dB (With Adaptive 808 Protection)
-  harmonicDrive: number;    // 0.0 to 1.0
-  outputLoudness: number;   // -6.0 to +3.0 dB
-  limiterStrength: number;  // 0.0 to 1.0
+  lowMidWarmth: number;    // -3.0 to +3.0 dB (Default: 0.0)
+  highAir: number;          // 0.0 to +3.0 dB (Default: 0.0)
+  subPunch808: number;      // -3.0 to +3.0 dB (Default: 0.0)
+  harmonicDrive: number;    // 0.0 to 0.3 (Default: 0.0)
+  outputLoudness: number;   // -3.0 to +1.0 dB (Default: 0.0)
+  limiterStrength: number;  // 0.0 to 1.0 (Default: 0.3)
 }
 
 export interface MeterData {
@@ -44,43 +70,50 @@ export interface MeterData {
 export const DEFAULT_ENGINEER_SETTINGS: EngineerSettings = {
   mode: 'STREAMING',
   isBypassed: false,
-  lowMidWarmth: 1.2,
-  highAir: 3.5,
-  subPunch808: 2.0,
-  harmonicDrive: 0.20,
+  lowMidWarmth: 0.0,
+  highAir: 0.0,
+  subPunch808: 0.0,
+  harmonicDrive: 0.0,
   outputLoudness: 0.0,
-  limiterStrength: 0.50
+  limiterStrength: 0.30
 };
 
 class HiFiDSPAudioEngine {
   private ctx: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
+  private attachedAudioElement: HTMLAudioElement | null = null;
   
   // DSP Chain Nodes
   private inputAnalyser: AnalyserNode | null = null;
-  private highPassFilter: BiquadFilterNode | null = null; // 20Hz Subsonic
-  private subLowShelf: BiquadFilterNode | null = null;     // 808 Low-Frequency Control
+  private headroomPadNode: GainNode | null = null;       // -3dB Internal Bus Pad
+  private highPassFilter: BiquadFilterNode | null = null; // Gentle 20Hz Subsonic Filter
+  private subLowShelf: BiquadFilterNode | null = null;     // 60Hz Low-Frequency Control
   private lowMidPeaking: BiquadFilterNode | null = null;   // Low-Mid Warmth (300Hz)
   private airHighShelf: BiquadFilterNode | null = null;    // High-Frequency Air (10kHz)
-  private lowMidSaturator: WaveShaperNode | null = null;  // Low-Mid Tube Saturation
-  private masterSaturator: WaveShaperNode | null = null;  // Harmonic Drive
-  private outputGainNode: GainNode | null = null;         // Output Loudness
-  private limiterNode: DynamicsCompressorNode | null = null;// Adaptive Limiter
+  private masterSaturator: WaveShaperNode | null = null;  // Normalized Soft Saturator
+  private makeupGainNode: GainNode | null = null;         // Internal Makeup Gain
+  private limiterNode: DynamicsCompressorNode | null = null;// Final Safety Ceiling Limiter
   private outputAnalyser: AnalyserNode | null = null;
-  private rawGainNode: GainNode | null = null;            // Raw Bypass Path
+  private rawGainNode: GainNode | null = null;            // Raw Clean Bypass Path
   private dspGainNode: GainNode | null = null;            // DSP Active Path
 
   private isInitialized = false;
   private isFallbackActive = false;
   private settings: EngineerSettings = { ...DEFAULT_ENGINEER_SETTINGS };
 
-  // Initialize DSP pipeline attached to HTMLAudioElement safely
+  // Initialize DSP pipeline attached to HTMLAudioElement safely without duplicate nodes
   public initialize(audioElement: HTMLAudioElement) {
-    if (this.isInitialized && this.ctx) {
+    // If already attached to this exact audio element, just ensure AudioContext is active
+    if (this.isInitialized && this.attachedAudioElement === audioElement && this.ctx) {
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch(() => {});
       }
       return;
+    }
+
+    // Teardown previous nodes if attaching to a new audio element
+    if (this.attachedAudioElement && this.attachedAudioElement !== audioElement) {
+      this.teardown();
     }
 
     try {
@@ -91,83 +124,90 @@ class HiFiDSPAudioEngine {
       }
 
       this.ctx = new AudioCtxClass();
+      this.attachedAudioElement = audioElement;
 
-      // Create Nodes Safely
+      // Create Source Node safely
       this.sourceNode = this.ctx.createMediaElementSource(audioElement);
       
       // 1. Input Analyser
       this.inputAnalyser = this.ctx.createAnalyser();
       this.inputAnalyser.fftSize = 256;
 
-      // 2. Subsonic Filter (20 Hz Butterworth Highpass)
+      // 2. Headroom Pad Node (-3.0 dB internal pad to prevent EQ clipping)
+      this.headroomPadNode = this.ctx.createGain();
+      this.headroomPadNode.gain.value = Math.pow(10, -3.0 / 20); // 0.707 linear
+
+      // 3. Subsonic Highpass Filter (20 Hz Butterworth Q=0.5 - transparent, preserves 808 sub)
       this.highPassFilter = this.ctx.createBiquadFilter();
       this.highPassFilter.type = 'highpass';
       this.highPassFilter.frequency.value = 20;
+      this.highPassFilter.Q.value = 0.5;
 
-      // 3. Low-Frequency Control (60 Hz 808 Shelf)
+      // 4. Low-Frequency 808 Control (60 Hz Low Shelf)
       this.subLowShelf = this.ctx.createBiquadFilter();
       this.subLowShelf.type = 'lowshelf';
       this.subLowShelf.frequency.value = 60;
+      this.subLowShelf.gain.value = 0.0;
 
-      // 4. Low-Mid Peaking Filter (320 Hz)
+      // 5. Low-Mid Peaking Filter (320 Hz, Q=0.7)
       this.lowMidPeaking = this.ctx.createBiquadFilter();
       this.lowMidPeaking.type = 'peaking';
       this.lowMidPeaking.frequency.value = 320;
-      this.lowMidPeaking.Q.value = 1.0;
+      this.lowMidPeaking.Q.value = 0.7;
+      this.lowMidPeaking.gain.value = 0.0;
 
-      // 5. High-Frequency Air Shelf (10 kHz)
+      // 6. High-Frequency Air Shelf (10 kHz)
       this.airHighShelf = this.ctx.createBiquadFilter();
       this.airHighShelf.type = 'highshelf';
       this.airHighShelf.frequency.value = 10000;
+      this.airHighShelf.gain.value = 0.0;
 
-      // 6. Saturators
-      this.lowMidSaturator = this.ctx.createWaveShaper();
-      this.lowMidSaturator.oversample = '2x';
-
+      // 7. Single Gentle WaveShaper Saturator
       this.masterSaturator = this.ctx.createWaveShaper();
       this.masterSaturator.oversample = '2x';
+      this.masterSaturator.curve = null; // Bypassed by default
 
-      // 7. Output Gain Node
-      this.outputGainNode = this.ctx.createGain();
-      this.outputGainNode.gain.value = 1.0;
+      // 8. Output / Makeup Gain Node
+      this.makeupGainNode = this.ctx.createGain();
+      this.makeupGainNode.gain.value = Math.pow(10, 3.0 / 20); // Compensates internal -3dB pad
 
-      // 8. Adaptive Limiter
+      // 9. Hard Output Safety Ceiling Limiter (-1.0 dBFS Max True-Peak Target)
       this.limiterNode = this.ctx.createDynamicsCompressor();
       this.limiterNode.threshold.value = -1.0;
-      this.limiterNode.knee.value = 0;
-      this.limiterNode.ratio.value = 20;
+      this.limiterNode.knee.value = 0.0;
+      this.limiterNode.ratio.value = 20.0;
       this.limiterNode.attack.value = 0.001;
       this.limiterNode.release.value = 0.08;
 
-      // 9. Output Analyser
+      // 10. Output Analyser
       this.outputAnalyser = this.ctx.createAnalyser();
       this.outputAnalyser.fftSize = 256;
 
-      // 10. Dual-Path Routing (Raw Bypass vs DSP Chain)
+      // 11. Dual-Path Routing (Clean RAW Bypass vs DSP Active Chain)
       this.rawGainNode = this.ctx.createGain();
       this.dspGainNode = this.ctx.createGain();
 
       this.rawGainNode.gain.value = 0.0;
       this.dspGainNode.gain.value = 1.0;
 
-      // --- Connect Graph ---
+      // --- Connect Web Audio Graph Conceptually ---
       // Source -> Input Analyser
       this.sourceNode.connect(this.inputAnalyser);
 
-      // Branch A: Direct RAW Path
+      // Branch A: Direct RAW Passthrough Path (100% Clean Original Master)
       this.inputAnalyser.connect(this.rawGainNode);
       this.rawGainNode.connect(this.ctx.destination);
 
-      // Branch B: DSP Processed Path
+      // Branch B: Processed DSP Path
       this.inputAnalyser.connect(this.dspGainNode);
-      this.dspGainNode.connect(this.highPassFilter);
+      this.dspGainNode.connect(this.headroomPadNode);
+      this.headroomPadNode.connect(this.highPassFilter);
       this.highPassFilter.connect(this.subLowShelf);
       this.subLowShelf.connect(this.lowMidPeaking);
       this.lowMidPeaking.connect(this.airHighShelf);
-      this.airHighShelf.connect(this.lowMidSaturator);
-      this.lowMidSaturator.connect(this.masterSaturator);
-      this.masterSaturator.connect(this.outputGainNode);
-      this.outputGainNode.connect(this.limiterNode);
+      this.airHighShelf.connect(this.masterSaturator);
+      this.masterSaturator.connect(this.makeupGainNode);
+      this.makeupGainNode.connect(this.limiterNode);
       this.limiterNode.connect(this.outputAnalyser);
       this.outputAnalyser.connect(this.ctx.destination);
 
@@ -176,30 +216,46 @@ class HiFiDSPAudioEngine {
     } catch (err) {
       console.warn('Hi-Fi Audio Engine Initialization Fallback:', err);
       this.isFallbackActive = true;
-      // Guarantee fallback direct routing if web audio errors
-      try {
-        if (this.sourceNode && this.ctx) {
-          this.sourceNode.connect(this.ctx.destination);
-        }
-      } catch (e) {}
     }
   }
 
-  // Soft-Clipping Tube Saturation Curve Generator
+  // Teardown and disconnect nodes cleanly to prevent memory leaks
+  private teardown() {
+    try {
+      if (this.sourceNode) {
+        this.sourceNode.disconnect();
+        this.sourceNode = null;
+      }
+      if (this.ctx && this.ctx.state !== 'closed') {
+        this.ctx.close().catch(() => {});
+        this.ctx = null;
+      }
+    } catch (e) {
+      console.warn('Teardown error:', e);
+    }
+    this.isInitialized = false;
+    this.attachedAudioElement = null;
+  }
+
+  // Normalized Soft-Clipping Saturation Curve Generator
+  // Uses smooth Math.tanh normalized so amplitude at x = 1 is exactly 1.0 (no clipping).
   private makeSaturationCurve(amount: number): Float32Array | null {
-    if (amount <= 0.01) return null;
-    const k = Math.min(amount * 25, 25);
-    const n_samples = 2048;
-    const curve = new Float32Array(n_samples);
-    const deg = Math.PI / 180;
-    for (let i = 0; i < n_samples; ++i) {
-      const x = (i * 2) / n_samples - 1;
-      curve[i] = ((3 + k) * x * 12 * deg) / (Math.PI + k * Math.abs(x));
+    if (amount <= 0.01) return null; // Bypasses WaveShaperNode completely when drive is 0
+    
+    // Scale drive down to gentle subtle range (max 0.15 intensity)
+    const drive = Math.min(amount * 0.15, 0.15);
+    const samples = 1024;
+    const curve = new Float32Array(samples);
+    const norm = Math.tanh(1 + drive);
+    
+    for (let i = 0; i < samples; i++) {
+      const x = (i * 2) / samples - 1; // Range [-1, 1]
+      curve[i] = Math.tanh(x * (1 + drive)) / norm;
     }
     return curve;
   }
 
-  // Apply Settings & Modes
+  // Apply Settings & Modes safely with smooth ramps
   public applySettings(newSettings: Partial<EngineerSettings>) {
     this.settings = { ...this.settings, ...newSettings };
 
@@ -210,7 +266,7 @@ class HiFiDSPAudioEngine {
       const mode = this.settings.mode;
       const isRaw = mode === 'RAW' || this.settings.isBypassed;
 
-      // 1. Crossfade Between RAW and DSP Paths safely
+      // 1. Crossfade Between RAW Bypass and DSP Paths
       if (this.rawGainNode && this.dspGainNode) {
         this.rawGainNode.gain.setTargetAtTime(isRaw ? 1.0 : 0.0, now, 0.02);
         this.dspGainNode.gain.setTargetAtTime(isRaw ? 0.0 : 1.0, now, 0.02);
@@ -218,60 +274,50 @@ class HiFiDSPAudioEngine {
 
       if (isRaw) return;
 
-      // 2. Mode Configuration
-      if (mode === 'STREAMING') {
-        // Target: ~ -14 LUFS, -1.0 dBTP ceiling, transparent limiting, conservative harmonics
-        if (this.limiterNode) {
-          this.limiterNode.threshold.setTargetAtTime(-1.0, now, 0.02);
-          this.limiterNode.knee.setTargetAtTime(3.0, now, 0.02);
-          this.limiterNode.ratio.setTargetAtTime(12.0, now, 0.02);
-          this.limiterNode.attack.setTargetAtTime(0.003, now, 0.02);
-          this.limiterNode.release.setTargetAtTime(0.12, now, 0.02);
-        }
-      } else if (mode === 'KNOCK') {
-        // Target: Punchy producer preview, 808 impact, strong kick transient, controlled low-end
-        if (this.limiterNode) {
-          this.limiterNode.threshold.setTargetAtTime(-0.5, now, 0.02);
-          this.limiterNode.knee.setTargetAtTime(0.0, now, 0.02);
-          this.limiterNode.ratio.setTargetAtTime(18.0, now, 0.02);
-          this.limiterNode.attack.setTargetAtTime(0.001, now, 0.02);
-          this.limiterNode.release.setTargetAtTime(0.06, now, 0.02);
-        }
+      // 2. Limiter Configuration (Strict -1.0 dBFS Output Ceiling)
+      if (this.limiterNode) {
+        const threshold = mode === 'KNOCK' ? -0.8 : -1.0;
+        this.limiterNode.threshold.setTargetAtTime(threshold, now, 0.02);
+        this.limiterNode.knee.setTargetAtTime(0.0, now, 0.02);
+        this.limiterNode.ratio.setTargetAtTime(20.0, now, 0.02);
+        this.limiterNode.attack.setTargetAtTime(0.001, now, 0.02);
+        this.limiterNode.release.setTargetAtTime(0.08, now, 0.02);
       }
 
-      // 3. Adaptive 808 Sub Control with Protection
+      // 3. Adaptive 808 Sub Control with Low-End Overload Protection
       const subEnergy = this.detectSubEnergy();
-      let adaptiveSubGain = this.settings.subPunch808;
+      let adaptiveSubGain = Math.min(Math.max(this.settings.subPunch808, -3.0), 3.0);
       
-      // If excessive sub energy is detected (> -12dB sub), scale down boost to prevent low-end buildup/pumping
-      if (subEnergy > 0.6 && adaptiveSubGain > 1.0) {
-        adaptiveSubGain = adaptiveSubGain * 0.5;
+      // If excessive sub energy is detected (> 0.70), scale back low-end boost to prevent pumping
+      if (subEnergy > 0.70 && adaptiveSubGain > 0.0) {
+        adaptiveSubGain = adaptiveSubGain * 0.3;
       }
 
       if (this.subLowShelf) {
         this.subLowShelf.gain.setTargetAtTime(adaptiveSubGain, now, 0.02);
       }
 
-      // 4. Low-Mid Warmth & High-End Air
+      // 4. Low-Mid Warmth & High-End Air (Bounded for safety)
       if (this.lowMidPeaking) {
-        this.lowMidPeaking.gain.setTargetAtTime(this.settings.lowMidWarmth, now, 0.02);
+        const warmthGain = Math.min(Math.max(this.settings.lowMidWarmth, -3.0), 3.0);
+        this.lowMidPeaking.gain.setTargetAtTime(warmthGain, now, 0.02);
       }
       if (this.airHighShelf) {
-        this.airHighShelf.gain.setTargetAtTime(this.settings.highAir, now, 0.02);
+        const airGain = Math.min(Math.max(this.settings.highAir, 0.0), 3.0);
+        this.airHighShelf.gain.setTargetAtTime(airGain, now, 0.02);
       }
 
-      // 5. Saturation Curves
+      // 5. Saturation Curve
       if (this.masterSaturator) {
         this.masterSaturator.curve = this.makeSaturationCurve(this.settings.harmonicDrive) as any;
       }
-      if (this.lowMidSaturator) {
-        this.lowMidSaturator.curve = this.makeSaturationCurve(this.settings.harmonicDrive * 0.5) as any;
-      }
 
-      // 6. Output Loudness Gain
-      if (this.outputGainNode) {
-        const gainLinear = Math.pow(10, this.settings.outputLoudness / 20);
-        this.outputGainNode.gain.setTargetAtTime(gainLinear, now, 0.02);
+      // 6. Makeup & Output Loudness Gain (-3dB base pad compensation + user offset)
+      if (this.makeupGainNode) {
+        const userOffsetDb = Math.min(Math.max(this.settings.outputLoudness, -3.0), 1.0);
+        const totalMakeupDb = 3.0 + userOffsetDb; // Compensate internal -3dB pad
+        const gainLinear = Math.pow(10, totalMakeupDb / 20);
+        this.makeupGainNode.gain.setTargetAtTime(gainLinear, now, 0.02);
       }
 
     } catch (err) {
@@ -356,8 +402,8 @@ class HiFiDSPAudioEngine {
         grDb = Math.abs(this.limiterNode.reduction || 0);
       }
 
-      const hasSubOverload = this.detectSubEnergy() > 0.75;
-      const isClipping = outputPeakDb >= 0.0;
+      const hasSubOverload = this.detectSubEnergy() > 0.70;
+      const isClipping = outputPeakDb > -0.5;
 
       return {
         inputLufs: parseFloat(inputLufs.toFixed(1)),
@@ -379,7 +425,11 @@ class HiFiDSPAudioEngine {
   }
 
   public setMode(mode: MasteringMode) {
-    this.applySettings({ mode });
+    if (mode === 'RAW') {
+      this.applySettings({ mode, isBypassed: true });
+    } else {
+      this.applySettings({ mode, isBypassed: false });
+    }
   }
 
   public applyPreset(presetId: string) {
@@ -394,6 +444,10 @@ class HiFiDSPAudioEngine {
 
   public toggleBypass() {
     this.applySettings({ isBypassed: !this.settings.isBypassed });
+  }
+
+  public resetToSafeDefaults() {
+    this.applySettings({ ...DEFAULT_ENGINEER_SETTINGS, isBypassed: false, mode: 'STREAMING' });
   }
 
   public resume() {

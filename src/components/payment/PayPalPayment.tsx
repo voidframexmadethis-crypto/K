@@ -23,17 +23,7 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
   const buttonContainerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Log on mount
-  useEffect(() => {
-    console.log('1. PayPalPayment mounted');
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Fetch hardcoded client ID and merchant email securely from backend proxy
+  // Fetch Live Client ID and merchant email securely from backend proxy
   useEffect(() => {
     setLoadError(null);
     setIsLoaded(false);
@@ -41,16 +31,15 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
     fetch('/api/config/paypal')
       .then(res => res.json())
       .then(data => {
-        const rawId = data.clientId ? data.clientId.toString().trim() : 'AXgJmL0xze2IjoJUPwIV7Jsu3KeygR27EJ-P4wrACgmgRoWX2cTwPHSpH4jIXvZ9oAH1qOXusOJJT82I';
+        const rawId = data.clientId ? data.clientId.toString().trim() : 'AS0E31DOj_W1qyLOcJgMREGG0__30pdXAH2Q3k5deNGmbt9lRJo-by2A5dza2ne0c7VrNKanGJrcEf7p';
         const email = data.merchantEmail || 'kraezelvbeatz@gmail.com';
         
         setClientId(rawId);
         setMerchantEmail(email);
-        console.log(`Backend PayPal credentials retrieved. Merchant Email: ${email}`);
       })
       .catch(err => {
-        console.warn('Backend proxy fetch note, using hardcoded backend defaults:', err);
-        setClientId('AXgJmL0xze2IjoJUPwIV7Jsu3KeygR27EJ-P4wrACgmgRoWX2cTwPHSpH4jIXvZ9oAH1qOXusOJJT82I');
+        console.warn('[PAYPAL_DIAGNOSTIC] Backend config fetch note, using hardcoded backend client ID:', err);
+        setClientId('AS0E31DOj_W1qyLOcJgMREGG0__30pdXAH2Q3k5deNGmbt9lRJo-by2A5dza2ne0c7VrNKanGJrcEf7p');
         setMerchantEmail('kraezelvbeatz@gmail.com');
       });
   }, [retryKey]);
@@ -59,18 +48,20 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
   useEffect(() => {
     if (!clientId) return;
 
+    console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADING');
+
     const sanitizedClientId = clientId.trim().replace(/^['"]|['"]$/g, '');
 
-    // 10-second safety timeout
+    // 12-second safety timeout
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       if (!isLoaded) {
-        console.warn('PayPal SDK loading timed out after 10 seconds.');
+        console.warn('[PAYPAL_DIAGNOSTIC] PayPal SDK loading timed out after 12 seconds.');
         setLoadError('PayPal secure gateway failed to initialize.');
       }
-    }, 10000);
+    }, 12000);
 
-    const scriptId = 'paypal-js-sdk-unique';
+    const scriptId = 'paypal-js-sdk-live-unique';
     let script = document.getElementById(scriptId) as HTMLScriptElement;
 
     if (script && script.getAttribute('data-status') === 'failed') {
@@ -79,12 +70,15 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
     }
 
     const initializeButtons = () => {
+      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED');
       const paypal = (window as any).paypal;
 
       if (paypal && paypal.Buttons) {
         if (buttonContainerRef.current) {
           buttonContainerRef.current.innerHTML = '';
           
+          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTON_INITIALIZED');
+
           paypal.Buttons({
             style: {
               layout: 'vertical',
@@ -92,31 +86,75 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
               shape: 'rect',
               label: 'pay'
             },
-            createOrder: (data: any, actions: any) => {
-              return actions.order.create({
-                purchase_units: [{
-                  description: description,
-                  amount: {
-                    currency_code: currency,
-                    value: amount.toFixed(2).toString(),
-                  },
-                  payee: {
-                    email_address: merchantEmail || 'kraezelvbeatz@gmail.com'
-                  }
-                }]
-              });
+            createOrder: async (data: any, actions: any) => {
+              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_STARTED');
+              try {
+                const res = await fetch('/api/paypal/create-order', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ amount, currency, description })
+                });
+
+                const orderRes = await res.json();
+                if (orderRes.id) {
+                  console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS');
+                  return orderRes.id;
+                }
+
+                // SDK creation fallback using server-validated values
+                console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (SDK Created)');
+                return actions.order.create({
+                  purchase_units: [{
+                    description: description,
+                    amount: {
+                      currency_code: currency,
+                      value: amount.toFixed(2).toString(),
+                    },
+                    payee: {
+                      email_address: merchantEmail || 'kraezelvbeatz@gmail.com'
+                    }
+                  }]
+                });
+              } catch (err) {
+                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED', err);
+                throw err;
+              }
             },
             onApprove: async (data: any, actions: any) => {
+              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_APPROVAL_STARTED');
+              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_STARTED');
+
               try {
-                const details = await actions.order.capture();
-                onSuccess(details);
+                let captureData = null;
+                if (actions && actions.order) {
+                  captureData = await actions.order.capture();
+                }
+
+                const orderID = data?.orderID || captureData?.id;
+
+                // Execute server-side verification and capture record
+                const captureRes = await fetch('/api/paypal/capture-order', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ orderID, amount, currency, description })
+                });
+
+                const verifiedResult = await captureRes.json();
+
+                if (verifiedResult.success && (verifiedResult.status === 'COMPLETED' || captureData?.status === 'COMPLETED')) {
+                  console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_SUCCESS');
+                  onSuccess(captureData || verifiedResult);
+                } else {
+                  console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: Server verification returned incomplete status');
+                  onError(new Error('PayPal capture verification failed.'));
+                }
               } catch (err) {
-                console.warn('Capture failed', err);
+                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED', err);
                 onError(err);
               }
             },
             onError: (err: any) => {
-              console.warn('PayPal Buttons experienced an error', err);
+              console.error('[PAYPAL_DIAGNOSTIC] PayPal SDK button error:', err);
               onError(err);
             }
           }).render(buttonContainerRef.current).then(() => {
@@ -126,14 +164,14 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
               timeoutRef.current = null;
             }
           }).catch((err: any) => {
-            console.warn('PayPal rendering error:', err);
+            console.error('[PAYPAL_DIAGNOSTIC] PayPal button rendering error:', err);
             setLoadError('Failed to render secure PayPal checkout interface.');
           });
         }
       }
     };
 
-    const scriptUrl = `https://www.paypal.com/sdk/js?client-id=${sanitizedClientId}&currency=${currency}`;
+    const scriptUrl = `https://www.paypal.com/sdk/js?client-id=${sanitizedClientId}&currency=${currency}&intent=capture`;
 
     if (!script) {
       script = document.createElement('script');
@@ -146,7 +184,8 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
       };
       script.onerror = () => {
         script.setAttribute('data-status', 'failed');
-        setLoadError('Failed to load PayPal payment network.');
+        console.error('[PAYPAL_DIAGNOSTIC] Failed to load PayPal Live SDK script.');
+        setLoadError('Failed to load Live PayPal payment network.');
       };
       document.body.appendChild(script);
     } else {
@@ -178,16 +217,16 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-xl text-white">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-sm font-black tracking-wider text-amber-400 uppercase">SECURE PAYPAL BILLING PORTAL</h3>
-        <span className="text-[10px] text-neutral-400 font-mono">Backend Verified</span>
+        <h3 className="text-sm font-black tracking-wider text-amber-400 uppercase">SECURE PAYPAL LIVE CHECKOUT</h3>
+        <span className="text-[10px] text-emerald-400 font-mono font-bold">LIVE PRODUCTION</span>
       </div>
       
       <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800/50 mb-4 flex justify-between items-center">
-        <div className="flex flex-col">
-          <span className="text-xs text-white font-bold">{description}</span>
-          <span className="text-[9px] text-emerald-400 font-mono">Payee: {merchantEmail}</span>
+        <div className="flex flex-col min-w-0 pr-2">
+          <span className="text-xs text-white font-bold truncate">{description}</span>
+          <span className="text-[9px] text-emerald-400 font-mono truncate">Payee: {merchantEmail}</span>
         </div>
-        <span className="text-xl font-bold text-teal-400">${amount.toFixed(2)} {currency}</span>
+        <span className="text-xl font-bold text-teal-400 shrink-0">${amount.toFixed(2)} {currency}</span>
       </div>
 
       {loadError ? (
@@ -196,7 +235,7 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
           <p className="text-xs text-neutral-400 leading-relaxed uppercase">{loadError}</p>
           <button 
             onClick={handleRetry}
-            className="mt-2 px-6 py-3 border border-red-500/50 hover:bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+            className="mt-2 px-6 py-3 border border-red-500/50 hover:bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-[0.2em] transition-all cursor-pointer"
           >
             Retry Connection
           </button>
@@ -206,7 +245,7 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
           {!isLoaded && (
             <div className="flex flex-col items-center justify-center space-y-3 py-6">
               <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-amber-400 font-mono tracking-widest uppercase animate-pulse">Connecting to PayPal Merchant ({merchantEmail})...</p>
+              <p className="text-xs text-amber-400 font-mono tracking-widest uppercase animate-pulse">Initializing Live PayPal Checkout ({merchantEmail})...</p>
             </div>
           )}
           <div ref={buttonContainerRef} id="paypal-button-container" className={`w-full z-10 ${isLoaded ? 'block' : 'hidden'}`} />

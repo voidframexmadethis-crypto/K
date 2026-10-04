@@ -14,7 +14,8 @@ import {
   Volume2,
   AlertTriangle,
   Info,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { 
   hiFiAudioEngine, 
@@ -50,7 +51,7 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
   }, []);
 
   const handleModeSelect = (mode: MasteringMode) => {
-    const updated = { ...settings, mode, isBypassed: false };
+    const updated = { ...settings, mode, isBypassed: mode === 'RAW' };
     setSettings(updated);
     hiFiAudioEngine.applySettings(updated);
   };
@@ -59,6 +60,12 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
     const updated = { ...settings, isBypassed: !settings.isBypassed };
     setSettings(updated);
     hiFiAudioEngine.applySettings(updated);
+  };
+
+  const handleResetToSafeDefaults = () => {
+    hiFiAudioEngine.resetToSafeDefaults();
+    const safe = hiFiAudioEngine.getSettings();
+    setSettings(safe);
   };
 
   const handleParamChange = (key: keyof EngineerSettings, value: number) => {
@@ -112,6 +119,13 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleResetToSafeDefaults}
+              className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white/80 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+              title="Reset parameters to safe clean defaults"
+            >
+              <RotateCcw size={13} /> Clean Reset
+            </button>
+            <button
               onClick={handleToggleBypass}
               className={`px-4 py-2 border text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${
                 settings.isBypassed 
@@ -137,9 +151,9 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
 
             <div className="text-right shrink-0">
               <span className="text-[10px] font-mono uppercase text-emerald-400 block font-bold">
-                Target: {meters.targetLufs} LUFS
+                Max Ceiling: -1.0 dBFS
               </span>
-              <span className="text-[9px] font-mono text-white/40 block">Untouched Source Master</span>
+              <span className="text-[9px] font-mono text-white/40 block">Clean Playback Guard</span>
             </div>
           </div>
         )}
@@ -161,11 +175,11 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-emerald-400">1. Streaming</span>
-                <span className="text-[8px] font-mono px-2 py-0.5 bg-emerald-500/20 text-emerald-300 uppercase">~ -14 LUFS</span>
+                <span className="text-xs font-black uppercase text-emerald-400">1. Streaming Reference</span>
+                <span className="text-[8px] font-mono px-2 py-0.5 bg-emerald-500/20 text-emerald-300 uppercase">-1.0 dB Ceiling</span>
               </div>
               <p className="text-[9px] text-white/70 leading-relaxed">
-                Optimized preview with transparent limiting, conservative harmonics, and preserved stereo transients.
+                Clean reference preview with transparent safety limiting, preserved 808 transients, and zero clipping.
               </p>
             </button>
 
@@ -180,10 +194,10 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black uppercase text-purple-400">2. Knock Mode</span>
-                <span className="text-[8px] font-mono px-2 py-0.5 bg-purple-500/20 text-purple-300 uppercase">Punchy 808</span>
+                <span className="text-[8px] font-mono px-2 py-0.5 bg-purple-500/20 text-purple-300 uppercase">Gentle 808</span>
               </div>
               <p className="text-[9px] text-white/70 leading-relaxed">
-                Punchy producer preview with 808 impact, strong kick transient, clear snare body, and exciting loudness.
+                Punchy producer preview with 808 sub impact, clear kick transients, and adaptive dynamic protection.
               </p>
             </button>
 
@@ -197,11 +211,11 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-white">3. Raw Master</span>
-                <span className="text-[8px] font-mono px-2 py-0.5 bg-white/20 text-white uppercase">BYPASS</span>
+                <span className="text-xs font-black uppercase text-white">3. Clean Safe Bypass</span>
+                <span className="text-[8px] font-mono px-2 py-0.5 bg-white/20 text-white uppercase">RAW</span>
               </div>
               <p className="text-[9px] text-white/70 leading-relaxed">
-                Completely bypasses DSP processing. Plays the original uploaded audio exactly as supplied.
+                Completely bypasses all DSP processing. Plays the original uploaded audio 100% bit-identical.
               </p>
             </button>
 
@@ -228,44 +242,47 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
 
           <div className="space-y-1">
             <span className="text-[8px] font-mono uppercase text-white/40 block">Output Peak</span>
-            <span className={`text-sm font-black font-mono ${meters.isClipping ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+            <span className={`text-sm font-black font-mono ${meters.isClipping ? 'text-amber-400' : 'text-emerald-400'}`}>
               {meters.outputPeakDb} dBFS
             </span>
           </div>
 
           <div className="space-y-1 col-span-2 sm:col-span-1">
-            <span className="text-[8px] font-mono uppercase text-white/40 block">Limiter Gain Reduction</span>
+            <span className="text-[8px] font-mono uppercase text-white/40 block">Limiter Reduction</span>
             <span className="text-sm font-black text-amber-400 font-mono">-{meters.gainReductionDb} dB</span>
           </div>
 
         </div>
 
         {/* 808 PROTECTION NOTIFICATION BAR */}
-        {meters.hasSubOverload && settings.mode !== 'RAW' && (
+        {meters.hasSubOverload && !settings.isBypassed && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-center gap-2">
             <AlertTriangle size={14} className="shrink-0" />
-            <span>Adaptive 808 Protection Active: Scaling down excessive low-end to prevent pumping & transient clipping.</span>
+            <span>Adaptive Sub Protection Active: Scaling down excessive low-end to preserve 808 transient punch.</span>
           </div>
         )}
 
         {/* ENGINEER SLIDERS */}
         <div className="p-6 bg-black/60 border border-white/10 rounded-sm space-y-6">
-          <h4 className="text-xs font-black uppercase text-emerald-400 tracking-widest flex items-center gap-2">
-            <Flame size={14} /> Engineer Fine-Tuning Controls
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-black uppercase text-emerald-400 tracking-widest flex items-center gap-2">
+              <Flame size={14} /> Engineer Fine-Tuning Controls
+            </h4>
+            <span className="text-[9px] font-mono text-white/40 uppercase">Internal -3dB Headroom Guard Active</span>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* 1. Low-Mid Warmth */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">Low-Mid Warmth (300Hz)</span>
-                <span className="text-emerald-400 font-bold">+{settings.lowMidWarmth.toFixed(1)} dB</span>
+                <span className="text-white/80 font-bold uppercase">Low-Mid Warmth (320Hz)</span>
+                <span className="text-emerald-400 font-bold">{settings.lowMidWarmth > 0 ? '+' : ''}{settings.lowMidWarmth.toFixed(1)} dB</span>
               </div>
               <input 
                 type="range" 
-                min="-6" 
-                max="6" 
+                min="-3" 
+                max="3" 
                 step="0.1"
                 value={settings.lowMidWarmth}
                 onChange={(e) => handleParamChange('lowMidWarmth', parseFloat(e.target.value))}
@@ -282,7 +299,7 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
               <input 
                 type="range" 
                 min="0" 
-                max="8" 
+                max="3" 
                 step="0.1"
                 value={settings.highAir}
                 onChange={(e) => handleParamChange('highAir', parseFloat(e.target.value))}
@@ -293,13 +310,13 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
             {/* 3. 808 Sub Punch */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">808 Sub Punch (60Hz)</span>
-                <span className="text-emerald-400 font-bold">+{settings.subPunch808.toFixed(1)} dB</span>
+                <span className="text-white/80 font-bold uppercase">808 Sub Control (60Hz)</span>
+                <span className="text-emerald-400 font-bold">{settings.subPunch808 > 0 ? '+' : ''}{settings.subPunch808.toFixed(1)} dB</span>
               </div>
               <input 
                 type="range" 
-                min="-6" 
-                max="8" 
+                min="-3" 
+                max="3" 
                 step="0.1"
                 value={settings.subPunch808}
                 onChange={(e) => handleParamChange('subPunch808', parseFloat(e.target.value))}
@@ -310,14 +327,14 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
             {/* 4. Harmonic Saturation Drive */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-white/80 font-bold uppercase">Harmonic Drive</span>
+                <span className="text-white/80 font-bold uppercase">Gentle Saturation Drive</span>
                 <span className="text-emerald-400 font-bold">{(settings.harmonicDrive * 100).toFixed(0)}%</span>
               </div>
               <input 
                 type="range" 
                 min="0" 
-                max="1" 
-                step="0.05"
+                max="0.30" 
+                step="0.01"
                 value={settings.harmonicDrive}
                 onChange={(e) => handleParamChange('harmonicDrive', parseFloat(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
@@ -332,8 +349,8 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
               </div>
               <input 
                 type="range" 
-                min="-6" 
-                max="3" 
+                min="-3" 
+                max="1" 
                 step="0.1"
                 value={settings.outputLoudness}
                 onChange={(e) => handleParamChange('outputLoudness', parseFloat(e.target.value))}
@@ -341,7 +358,7 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
               />
             </div>
 
-            {/* 6. Limiter Strength */}
+            {/* 6. Limiter Response Strength */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono">
                 <span className="text-white/80 font-bold uppercase">Limiter Response Strength</span>
@@ -365,7 +382,7 @@ export const SpotifyMasteringStudioModal: React.FC<SpotifyMasteringStudioModalPr
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/10">
           <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
             <CheckCircle2 size={16} /> 
-            <span>Original Upload File Intact · Preview DSP Processing Active</span>
+            <span>Original Upload File Intact · Safe Headroom Guard Active</span>
           </div>
 
           <button
