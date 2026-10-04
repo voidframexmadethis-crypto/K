@@ -2,6 +2,7 @@ export interface Campaign {
   id: string;
   name: string;
   productId?: string; // Beat, Pack, etc.
+  productLink?: string; // Automatically attached link
   status: 'draft' | 'in-production' | 'ready' | 'published' | 'archived';
   variants: CreativeVariant[];
   createdAt: string;
@@ -134,7 +135,7 @@ export interface Collection {
 export interface UserProfile {
   uid: string;
   email: string;
-  role: 'producer' | 'customer';
+  role: 'producer' | 'customer' | 'manager' | 'curator' | 'label' | 'engineer' | 'song_manager';
   purchasedBeatIds: string[];
   favoriteBeatIds: string[];
   displayName: string;

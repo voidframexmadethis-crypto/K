@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { OrderRecord, AnalyticsEventData } from './services/analyticsService';
@@ -30,7 +30,11 @@ import { ProfileSettings } from './components/dashboard/ProfileSettings';
 import { ProducerProfilePage } from './pages/ProducerProfilePage';
 import { CustomerLibrary } from './pages/CustomerLibrary';
 import { AudioPlayerPage } from './pages/AudioPlayerPage';
+import { ServicesPage } from './pages/ServicesPage';
 import { useBeatDeepLink } from './lib/useBeatDeepLink';
+import { logAnalyticsEvent } from './services/analyticsService';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './lib/firebase';
 import { cn } from './lib/utils';
 
 const DashboardOverview = () => {
@@ -136,7 +140,35 @@ const DashboardPlaceholder = ({ title }: { title: string }) => (
 );
 
 function MainAppContent() {
+  const location = useLocation();
   useBeatDeepLink();
+
+  useEffect(() => {
+    // 1. Exclude owner traffic from visitor analytics
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        console.log('[ANALYTICS] Owner session detected. Page view tracking suppressed.');
+        return;
+      }
+
+      // 2. Track public page view
+      const params = new URLSearchParams(location.search);
+      const beatIdFromUrl = params.get('beat');
+
+      const eventData: any = {
+        eventType: 'page_view',
+        device: window.innerWidth < 768 ? 'Mobile' : 'Desktop'
+      };
+
+      if (beatIdFromUrl) {
+        eventData.beatId = beatIdFromUrl;
+      }
+
+      logAnalyticsEvent(eventData);
+    });
+
+    return () => unsubscribe();
+  }, [location.pathname, location.search]);
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black font-sans">
@@ -151,6 +183,7 @@ function MainAppContent() {
         <Route path="/videos" element={<VideosPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/cart" element={<CartPage />} />
+        <Route path="/services" element={<ServicesPage />} />
         <Route path="/profile" element={<ProducerProfilePage />} />
         <Route path="/producer/*" element={<ProducerProfilePage />} />
         <Route path="/audio-player" element={<AudioPlayerPage />} />

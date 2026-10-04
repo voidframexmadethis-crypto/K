@@ -32,19 +32,17 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
     fetch('/api/config/paypal')
       .then(res => res.json())
       .then(data => {
-        const rawId = data.clientId ? data.clientId.toString().trim() : 'AS0E31DOj_W1qyLOcJgMREGG0__30pdXAH2Q3k5deNGmbt9lRJo-by2A5dza2ne0c7VrNKanGJrcEf7p';
+        const rawId = data.clientId ? data.clientId.toString().trim() : '';
         const email = data.merchantEmail || 'kraezelvbeatz@gmail.com';
         
         console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_CLIENT_ID_PRESENT=${!!rawId}`);
         console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_HAS_SERVER_SECRET=${!!data.hasServerSecret}`);
-        setClientId(rawId);
+        setClientId(rawId || import.meta.env.VITE_PAYPAL_CLIENT_ID || '');
         setMerchantEmail(email);
       })
       .catch(err => {
-        console.warn('[PAYPAL_DIAGNOSTIC] Backend config fetch note, using fallback client ID:', err);
-        const fallbackId = 'AS0E31DOj_W1qyLOcJgMREGG0__30pdXAH2Q3k5deNGmbt9lRJo-by2A5dza2ne0c7VrNKanGJrcEf7p';
-        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_CLIENT_ID_PRESENT=${!!fallbackId}`);
-        setClientId(fallbackId);
+        console.warn('[PAYPAL_DIAGNOSTIC] Backend config fetch note, using env fallback:', err);
+        setClientId(import.meta.env.VITE_PAYPAL_CLIENT_ID || '');
         setMerchantEmail('kraezelvbeatz@gmail.com');
       });
   }, [retryKey]);

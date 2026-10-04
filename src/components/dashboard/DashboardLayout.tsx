@@ -28,6 +28,8 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const profileMenuItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+    { name: 'Portal Upload', icon: Plus, href: '/dashboard/upload' },
     { name: 'View Public Profile', icon: UserIcon, href: '/profile' },
     { name: 'Profile Settings', icon: Settings, href: '/dashboard/settings' },
     { name: 'View Store Front', icon: ExternalLink, href: '/' },

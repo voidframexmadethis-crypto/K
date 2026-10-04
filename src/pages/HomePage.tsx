@@ -12,6 +12,7 @@ import { MerchSection } from '../components/home/MerchSection';
 import { ProducerFeature } from '../components/ProducerFeature';
 import { Music, ArrowRight, Download, Sparkles, Layers, Upload } from 'lucide-react';
 import { useBeatCatalogStore } from '../store/useBeatCatalogStore';
+import { AdOverlay } from '../components/home/AdOverlay';
 
 export const HomePage = () => {
   const { beats } = useBeatCatalogStore();
@@ -118,6 +119,7 @@ export const HomePage = () => {
 
       {/* 12. PRODUCER PROFILE & BIO */}
       <ProducerFeature />
+      <AdOverlay />
 
       {/* 13. FOOTER CTA */}
       <section className="py-32 flex flex-col items-center text-center px-6 border-t border-white/10 bg-neutral-950">

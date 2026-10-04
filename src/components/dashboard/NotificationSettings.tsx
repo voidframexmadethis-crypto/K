@@ -4,6 +4,13 @@ import { cn } from '../../lib/utils';
 
 export const NotificationSettings = () => {
   const [enabled, setEnabled] = useState(false);
+  const [adminSecret, setAdminSecret] = useState(localStorage.getItem('kraezelv_admin_secret') || '');
+
+  const saveSecret = (val: string) => {
+    setAdminSecret(val);
+    localStorage.setItem('kraezelv_admin_secret', val);
+  };
+
   const [settings, setSettings] = useState({
     newSale: true,
     freeDownload: true,
@@ -23,16 +30,29 @@ export const NotificationSettings = () => {
 
   const registerServiceWorker = async () => {
     if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: 'BFg7-EXAMPLE_KEY_PLEASE_REPLACE-4aJ5z2S_A' // User needs to update this
-      });
-      await fetch('/api/notifications/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription })
-      });
+      try {
+        const configRes = await fetch('/api/notifications/config');
+        const { vapidPublicKey } = await configRes.json();
+
+        if (!vapidPublicKey) {
+          console.warn('[NOTIFICATIONS] VAPID Public Key missing from server config.');
+          return;
+        }
+
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidPublicKey
+        });
+
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription, adminSecret })
+        });
+      } catch (err) {
+        console.error('[NOTIFICATIONS] Subscription failed:', err);
+      }
     }
   };
 
@@ -71,6 +91,20 @@ export const NotificationSettings = () => {
             />
           </label>
         ))}
+      </div>
+
+      <div className="p-6 bg-neutral-900 border border-white/5 space-y-4">
+         <div className="flex items-center justify-between">
+            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Owner Admin Secret</label>
+            <Shield size={12} className="text-white/20" />
+         </div>
+         <input 
+           type="password"
+           value={adminSecret}
+           onChange={(e) => saveSecret(e.target.value)}
+           placeholder="ENTER SECRET TO AUTHORIZE PUSH..."
+           className="w-full bg-black border border-white/10 p-4 text-xs font-mono text-white outline-none focus:border-purple-500"
+         />
       </div>
 
       <button onClick={sendTestNotification} className="w-full py-6 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all flex items-center justify-center gap-2">

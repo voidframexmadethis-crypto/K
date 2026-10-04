@@ -50,7 +50,7 @@ export const MassiveFooter = () => {
                 links: [
                   { name: 'Apparel & Merch', href: '/merch' },
                   { name: 'Sound Kits', href: '#' },
-                  { name: 'Mixing Services', href: '#' },
+                  { name: 'Mixing Services', href: '/services' },
                   { name: 'Studio Rental', href: '#' },
                   { name: 'UGC Content Lab', href: '/dashboard/content' }
                 ] 

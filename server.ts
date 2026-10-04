@@ -4,20 +4,16 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import webpush from 'web-push';
-import * as admin from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { INITIAL_DEFAULT_BEATS } from './src/data/defaultCatalog.js';
 
 // Load environment variables
 dotenv.config();
 
 // Configure Firebase Admin
-if (!admin.apps.length) {
-  // Assuming credentials are set via env variables in Cloudflare
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-  });
-}
-const db = admin.firestore();
+const app = initializeApp();
+const db = getFirestore(app);
 
 // Configure Web Push
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
@@ -33,7 +29,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 const PAYPAL_API_BASE = 'https://api-m.paypal.com';
 
 // Authoritative Production PayPal Credentials (Server-Side Only)
-const BACKEND_PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || 'AS0E31DOj_W1qyLOcJgMREGG0__30pdXAH2Q3k5deNGmbt9lRJo-by2A5dza2ne0c7VrNKanGJrcEf7p';
+const BACKEND_PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '';
 const BACKEND_PAYPAL_SECRET = process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET || '';
 const BACKEND_PAYPAL_EMAIL = process.env.PAYPAL_MERCHANT_EMAIL || 'kraezelvbeatz@gmail.com';
 
@@ -91,31 +87,45 @@ async function startServer() {
   // Server-side Idempotent Beat Creation Endpoint
   const publishedSubmissionsMap = new Map<string, any>();
 
-  app.post('/api/beats/publish', (req: Request, res: Response) => {
+  app.post('/api/beats/publish', async (req: Request, res: Response) => {
     const { idempotencyKey, beatData } = req.body;
 
-    if (!idempotencyKey) {
-      return res.status(400).json({ success: false, error: 'MISSING_IDEMPOTENCY_KEY' });
+    if (!idempotencyKey || !beatData?.id) {
+      return res.status(400).json({ success: false, error: 'MISSING_DATA' });
     }
 
-    // If submission with this idempotencyKey was already processed
-    if (publishedSubmissionsMap.has(idempotencyKey)) {
-      console.log(`[SERVER_IDEMPOTENCY] Returned existing beat for idempotency key [${idempotencyKey}]`);
+    try {
+      // 1. Idempotency Check in Firestore
+      const beatRef = db.collection('beats').doc(beatData.id);
+      const doc = await beatRef.get();
+
+      if (doc.exists) {
+        console.log(`[SERVER_IDEMPOTENCY] Beat already exists in database: ${beatData.id}`);
+        return res.json({
+          success: true,
+          deduplicated: true,
+          beat: doc.data()
+        });
+      }
+
+      // 2. Persist to authoritative Firestore collection
+      await beatRef.set({
+        ...beatData,
+        serverTimestamp: FieldValue.serverTimestamp(),
+        idempotencyKey
+      });
+
+      console.log(`[SERVER_PERSISTENCE] Beat published and saved to Firestore: ${beatData.id}`);
+
       return res.json({
         success: true,
-        deduplicated: true,
-        beat: publishedSubmissionsMap.get(idempotencyKey)
+        deduplicated: false,
+        beat: beatData
       });
+    } catch (err: any) {
+      console.error('[SERVER_PERSISTENCE] Firestore Save Error:', err);
+      res.status(500).json({ success: false, error: 'DATABASE_ERROR' });
     }
-
-    publishedSubmissionsMap.set(idempotencyKey, beatData);
-    console.log(`[SERVER_IDEMPOTENCY] Beat published live with idempotency key [${idempotencyKey}]`);
-
-    return res.json({
-      success: true,
-      deduplicated: false,
-      beat: beatData
-    });
   });
 
   // Push Notification Subscription Endpoint
@@ -128,7 +138,7 @@ async function startServer() {
     
     await db.collection('owner_push_subscriptions').add({
       ...subscription,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(),
     });
     console.log('[PUSH_NOTIFICATION] Subscription saved to Firestore.');
     res.json({ success: true });
@@ -332,8 +342,17 @@ async function startServer() {
 
       let html = fs.readFileSync(indexPath, 'utf-8');
 
-      // Look up beat from catalog or fallback
-      const matchedBeat = INITIAL_DEFAULT_BEATS.find(b => b.id === beatId);
+      let matchedBeat = INITIAL_DEFAULT_BEATS.find(b => b.id === beatId);
+
+      // Try looking up in Firestore for live uploaded beats
+      try {
+        const beatDoc = await db.collection('beats').doc(beatId).get();
+        if (beatDoc.exists) {
+          matchedBeat = beatDoc.data() as any;
+        }
+      } catch (e) {
+        console.warn(`[SOCIAL_METADATA] Firestore lookup failed for beat [${beatId}]`, e);
+      }
 
       const host = req.get('host') || 'localhost:3000';
       const protocol = req.protocol || 'https';

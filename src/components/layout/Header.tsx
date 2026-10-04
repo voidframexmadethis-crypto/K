@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
+import { auth } from '../../lib/firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export const MainHeader = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -17,9 +19,17 @@ export const MainHeader = () => {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [language, setLanguage] = useState('EN');
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
 
   const accountRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -45,6 +55,7 @@ export const MainHeader = () => {
 
   const navLinks = [
     { name: 'Beats', href: '/beats' },
+    { name: 'Services & Distribution', href: '/services' },
     { name: 'Profile', href: '/profile' },
     { name: 'Collections', href: '/collections' },
     { name: 'Beat Packs', href: '/packs' },
@@ -55,7 +66,7 @@ export const MainHeader = () => {
   ];
 
   const accountLinks = [
-    { name: 'DASHBOARD', href: '/dashboard', icon: LayoutDashboard, prominent: true },
+    { name: 'DASHBOARD / UPLOAD PORTAL', href: '/dashboard', icon: LayoutDashboard, prominent: true },
     { name: 'View Public Profile', href: '/profile', icon: User },
     { name: 'My Beats', href: '/dashboard/music', icon: Music },
     { name: 'Upload Beat', href: '/dashboard/upload', icon: Plus },
@@ -173,20 +184,24 @@ export const MainHeader = () => {
         {/* Zone 3: Account & Artist Onboarding CTAs (Items 2, 3, 4) */}
         <div className="flex items-center gap-4 shrink-0">
           {/* 4. New Artist Ingestion Portal CTA */}
-          <Link 
-            to="/dashboard/upload"
-            className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-md"
-          >
-            <Sparkles size={12} /> Artist Portal
-          </Link>
+          {user && (
+            <Link 
+              to="/dashboard"
+              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-md"
+            >
+              <LayoutDashboard size={12} /> DASHBOARD / UPLOAD PORTAL
+            </Link>
+          )}
 
           {/* 3. New Fan Account Registration CTA */}
-          <button 
-            onClick={() => setShowLoginModal(true)}
-            className="hidden md:flex items-center gap-2 px-4 py-2.5 border border-white/20 text-white text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all"
-          >
-            <UserPlus size={12} /> Sign Up
-          </button>
+          {!user && (
+            <button 
+              onClick={() => setShowLoginModal(true)}
+              className="hidden md:flex items-center gap-2 px-4 py-2.5 border border-white/20 text-white text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all"
+            >
+              <UserPlus size={12} /> Sign Up
+            </button>
+          )}
 
           {/* Account Dropdown */}
           <div className="relative" ref={accountRef}>
@@ -212,21 +227,23 @@ export const MainHeader = () => {
                   className="absolute right-0 mt-4 w-64 bg-black/95 backdrop-blur-2xl border border-white/15 shadow-2xl overflow-hidden z-[110]"
                 >
                   <div className="flex flex-col py-2">
-                    {accountLinks.map((link) => (
-                      <Link
-                        key={link.name}
-                        to={link.href}
-                        className={cn(
-                          "flex items-center gap-3 px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-                          link.prominent ? "bg-white text-black hover:bg-neutral-200" : 
-                          link.danger ? "text-red-500 hover:bg-red-500/10" :
-                          "text-white/50 hover:text-white hover:bg-white/5"
-                        )}
-                      >
-                        <link.icon size={14} />
-                        {link.name}
-                      </Link>
-                    ))}
+                    {accountLinks
+                      .filter(link => !link.prominent || user)
+                      .map((link) => (
+                        <Link
+                          key={link.name}
+                          to={link.href}
+                          className={cn(
+                            "flex items-center gap-3 px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                            link.prominent ? "bg-white text-black hover:bg-neutral-200" : 
+                            link.danger ? "text-red-500 hover:bg-red-500/10" :
+                            "text-white/50 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <link.icon size={14} />
+                          {link.name}
+                        </Link>
+                      ))}
                   </div>
                 </motion.div>
               )}
@@ -309,19 +326,21 @@ export const MainHeader = () => {
                        <User size={14} /> Account Details
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {accountLinks.map(link => (
-                        <Link
-                          key={link.name}
-                          to={link.href}
-                          onClick={() => setIsMenuOpen(false)}
-                          className={cn(
-                            "flex items-center gap-3 p-4 text-[10px] font-black uppercase tracking-widest transition-all",
-                            link.prominent ? "bg-white text-black" : "bg-white/5 text-white/60"
-                          )}
-                        >
-                          <link.icon size={16} /> {link.name}
-                        </Link>
-                      ))}
+                      {accountLinks
+                        .filter(link => !link.prominent || user)
+                        .map(link => (
+                          <Link
+                            key={link.name}
+                            to={link.href}
+                            onClick={() => setIsMenuOpen(false)}
+                            className={cn(
+                              "flex items-center gap-3 p-4 text-[10px] font-black uppercase tracking-widest transition-all",
+                              link.prominent ? "bg-white text-black" : "bg-white/5 text-white/60"
+                            )}
+                          >
+                            <link.icon size={16} /> {link.name}
+                          </Link>
+                        ))}
                     </div>
                   </div>
                 </div>

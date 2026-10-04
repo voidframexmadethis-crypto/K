@@ -485,7 +485,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   <input 
                     type="file" 
                     className="absolute inset-0 opacity-0 cursor-pointer"
-                    accept=".mp3,.m4a,.wav"
+                    accept=".mp3,.m4a"
                     onChange={async (e) => {
                       if (e.target.files?.[0]) {
                         const file = e.target.files[0];

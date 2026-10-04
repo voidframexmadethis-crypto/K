@@ -12,7 +12,7 @@ import { db } from '../lib/firebase';
 
 export interface AnalyticsEventData {
   id?: string;
-  eventType: 'play' | 'page_view' | 'cart_add' | 'checkout_completed' | 'free_download' | 'vr_view';
+  eventType: 'play' | 'page_view' | 'cart_add' | 'checkout_completed' | 'free_download' | 'vr_view' | 'ad_click' | 'ad_created';
   beatId?: string;
   beatTitle?: string;
   amount?: number;
@@ -68,12 +68,24 @@ export async function logAnalyticsEvent(data: Omit<AnalyticsEventData, 'id' | 't
     const randomCountry = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
     const randomDevice = DEVICES[Math.floor(Math.random() * DEVICES.length)];
     
-    await addDoc(collection(db, 'analytics_events'), {
+    // Construct the payload
+    const payload: any = {
       ...data,
       country: data.country || randomCountry,
       device: data.device || randomDevice,
       timestamp: serverTimestamp()
-    });
+    };
+
+    // Sanitization: Remove any undefined or NaN properties to prevent Firestore errors
+    const sanitizedPayload = Object.keys(payload).reduce((acc: any, key) => {
+      const value = payload[key];
+      if (value !== undefined && !(typeof value === 'number' && isNaN(value))) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    
+    await addDoc(collection(db, 'analytics_events'), sanitizedPayload);
   } catch (err) {
     console.warn('Analytics event logging fallback:', err);
   }

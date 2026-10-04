@@ -88,7 +88,7 @@
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["producer", "customer"] },
+        "role": { "type": "string", "enum": ["producer", "customer", "manager", "curator", "label", "engineer"] },
         "purchasedBeatIds": { "type": "array" },
         "favoriteBeatIds": { "type": "array" },
         "displayName": { "type": "string" }
