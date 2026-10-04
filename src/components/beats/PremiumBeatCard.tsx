@@ -1,15 +1,37 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, ShoppingCart, Heart, Share2, MoreVertical, Download } from 'lucide-react';
+import { Play, ShoppingCart, Heart, Share2, Download } from 'lucide-react';
 import { Beat } from '../../types';
 import { useAudioStore } from '../../store/useAudioStore';
 import { cn } from '../../lib/utils';
 import { LicensingModal } from './LicensingModal';
+import { FreeDownloadModal } from './FreeDownloadModal';
 
 export const PremiumBeatCard = ({ beat, variant = 'default' }: { beat: Beat, variant?: 'default' | 'large' }) => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const isCurrent = currentBeat?.id === beat.id;
   const [isLicensingOpen, setIsLicensingOpen] = useState(false);
+  const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
+
+  const isFree = beat.isFree || beat.freeDownloadEnabled;
+  const isEmailRequired = beat.freeDownloadEmailRequired || beat.freeDownloadType === 'email';
+
+  const handleFreeDownloadClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isEmailRequired) {
+      setIsFreeModalOpen(true);
+    } else {
+      const downloadLink = document.createElement('a');
+      downloadLink.href = beat.audioUrl || '#';
+      downloadLink.download = `${beat.title}_Free.mp3`;
+      downloadLink.target = '_blank';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+  };
 
   return (
     <div className={cn(
@@ -58,9 +80,9 @@ export const PremiumBeatCard = ({ beat, variant = 'default' }: { beat: Beat, var
         </div>
 
         {/* Free Tag */}
-        {beat.isFree && (
+        {isFree && (
           <div className="absolute bottom-6 left-6">
-            <span className="px-4 py-2 bg-white text-black text-[10px] font-black uppercase tracking-[0.4em]">Free Download</span>
+            <span className="px-4 py-2 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-[0.4em]">Free Download</span>
           </div>
         )}
       </div>
@@ -80,29 +102,29 @@ export const PremiumBeatCard = ({ beat, variant = 'default' }: { beat: Beat, var
           </div>
           <div className="flex flex-col items-end gap-1">
              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">From</span>
-             <span className="text-xl font-black text-white">${beat.licenses.basic.price}</span>
+             <span className="text-xl font-black text-white">${beat.licenses?.basic?.price || '29.99'}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
+           {isFree && (
+             <button 
+               onClick={handleFreeDownloadClick}
+               className="py-4 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase tracking-[0.3em] hover:bg-emerald-500/30 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+             >
+               <Download size={14} /> Free MP3
+             </button>
+           )}
            <button 
              onClick={(e) => {
                e.preventDefault();
                e.stopPropagation();
-               console.log('1. BUY BEAT CLICKED');
-               console.log('2. Parent navigation prevented');
                setIsLicensingOpen(true);
              }}
-             className="py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.4em] hover:bg-neutral-200 transition-colors flex items-center justify-center gap-2"
+             className="py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.4em] hover:bg-neutral-200 transition-colors flex items-center justify-center gap-2 cursor-pointer"
            >
-             <ShoppingCart size={14} /> License
+             <ShoppingCart size={14} /> License ${beat.licenses?.basic?.price || '29.99'}
            </button>
-           <Link 
-             to="/audio-player"
-             className="py-4 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.4em] hover:bg-white hover:text-black transition-colors flex items-center justify-center gap-2"
-           >
-             <Download size={14} /> Details
-           </Link>
         </div>
       </div>
 
@@ -110,6 +132,12 @@ export const PremiumBeatCard = ({ beat, variant = 'default' }: { beat: Beat, var
         beat={beat}
         isOpen={isLicensingOpen}
         onClose={() => setIsLicensingOpen(false)}
+      />
+
+      <FreeDownloadModal
+        beat={beat}
+        isOpen={isFreeModalOpen}
+        onClose={() => setIsFreeModalOpen(false)}
       />
     </div>
   );

@@ -16,9 +16,14 @@ const BACKEND_PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VIT
 const BACKEND_PAYPAL_SECRET = process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET || '';
 const BACKEND_PAYPAL_EMAIL = process.env.PAYPAL_MERCHANT_EMAIL || 'kraezelvbeatz@gmail.com';
 
-// Server-side helper to acquire PayPal REST Access Token safely
+// Server-side helper to acquire PayPal REST Access Token safely without logging secrets
 async function getPayPalAccessToken(clientId: string, secret: string): Promise<string | null> {
-  if (!secret) return null;
+  if (!secret) {
+    console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_SKIPPED (No Secret in Runtime)');
+    return null;
+  }
+
+  console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_REQUEST_STARTED');
   try {
     const auth = Buffer.from(`${clientId.trim()}:${secret.trim()}`).toString('base64');
     const response = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
@@ -29,11 +34,20 @@ async function getPayPalAccessToken(clientId: string, secret: string): Promise<s
         'Content-Type': 'application/x-www-form-urlencoded'
       }
     });
-    if (!response.ok) return null;
+
+    if (!response.ok) {
+      console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_FAILED: HTTP ${response.status}`);
+      return null;
+    }
+
     const data = await response.json() as any;
-    return data.access_token || null;
-  } catch (err) {
-    console.error('[PAYPAL_SERVER] Failed to obtain PayPal Access Token:', err);
+    if (data.access_token) {
+      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_SUCCESS');
+      return data.access_token;
+    }
+    return null;
+  } catch (err: any) {
+    console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_ERROR:', err?.message || err);
     return null;
   }
 }
@@ -48,7 +62,38 @@ async function startServer() {
       clientId: BACKEND_PAYPAL_CLIENT_ID,
       merchantEmail: BACKEND_PAYPAL_EMAIL,
       currency: 'USD',
-      env: 'LIVE'
+      env: 'LIVE',
+      hasServerSecret: !!BACKEND_PAYPAL_SECRET
+    });
+  });
+
+  // Server-side Idempotent Beat Creation Endpoint
+  const publishedSubmissionsMap = new Map<string, any>();
+
+  app.post('/api/beats/publish', (req: Request, res: Response) => {
+    const { idempotencyKey, beatData } = req.body;
+
+    if (!idempotencyKey) {
+      return res.status(400).json({ success: false, error: 'MISSING_IDEMPOTENCY_KEY' });
+    }
+
+    // If submission with this idempotencyKey was already processed
+    if (publishedSubmissionsMap.has(idempotencyKey)) {
+      console.log(`[SERVER_IDEMPOTENCY] Returned existing beat for idempotency key [${idempotencyKey}]`);
+      return res.json({
+        success: true,
+        deduplicated: true,
+        beat: publishedSubmissionsMap.get(idempotencyKey)
+      });
+    }
+
+    publishedSubmissionsMap.set(idempotencyKey, beatData);
+    console.log(`[SERVER_IDEMPOTENCY] Beat published live with idempotency key [${idempotencyKey}]`);
+
+    return res.json({
+      success: true,
+      deduplicated: false,
+      beat: beatData
     });
   });
 
@@ -79,9 +124,6 @@ async function startServer() {
               amount: {
                 currency_code: validatedCurrency,
                 value: validatedAmount
-              },
-              payee: {
-                email_address: BACKEND_PAYPAL_EMAIL
               }
             }]
           })
@@ -96,11 +138,21 @@ async function startServer() {
             status: orderData.status,
             mode: 'LIVE'
           });
+        } else {
+          const errName = orderData.name || 'UNPROCESSABLE_ENTITY';
+          const errMsg = orderData.message || 'PayPal order creation failed';
+          console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED: HTTP ${orderResponse.status} - ${errName}: ${errMsg}`);
+          return res.status(orderResponse.status || 400).json({
+            success: false,
+            error: errName,
+            message: errMsg,
+            httpStatus: orderResponse.status
+          });
         }
       }
 
-      // If secret is not set, return server-authoritative payload for client SDK creation
-      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (SDK Server Validated)');
+      // If secret is not set in runtime, return server-authoritative payload for client SDK creation
+      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (SDK Fallback)');
       res.json({
         success: true,
         clientId: BACKEND_PAYPAL_CLIENT_ID,
@@ -110,10 +162,11 @@ async function startServer() {
         description: validatedDescription
       });
     } catch (err: any) {
-      console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED:', err.message);
+      console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED:', err?.message || err);
       res.status(500).json({
         success: false,
-        error: 'Server-side PayPal order creation failed.'
+        error: 'SERVER_ERROR',
+        message: err?.message || 'Server-side PayPal order creation failed.'
       });
     }
   });
@@ -125,7 +178,7 @@ async function startServer() {
 
     if (!orderID) {
       console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: Missing orderID');
-      return res.status(400).json({ success: false, error: 'Missing PayPal orderID' });
+      return res.status(400).json({ success: false, error: 'MISSING_ORDER_ID', message: 'Missing PayPal orderID' });
     }
 
     try {
@@ -151,6 +204,16 @@ async function startServer() {
             merchantEmail: BACKEND_PAYPAL_EMAIL,
             payerEmail: captureData.payer?.email_address || customerEmail || 'buyer@kraezelvbeatz.com'
           });
+        } else {
+          const errName = captureData.name || 'CAPTURE_FAILED';
+          const errMsg = captureData.message || 'PayPal capture failed';
+          console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: HTTP ${captureResponse.status} - ${errName}: ${errMsg}`);
+          return res.status(captureResponse.status || 400).json({
+            success: false,
+            error: errName,
+            message: errMsg,
+            httpStatus: captureResponse.status
+          });
         }
       }
 
@@ -164,10 +227,11 @@ async function startServer() {
         message: 'PayPal payment verified and captured successfully.'
       });
     } catch (err: any) {
-      console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED:', err.message);
+      console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED:', err?.message || err);
       res.status(500).json({
         success: false,
-        error: 'Server-side PayPal order capture failed.'
+        error: 'SERVER_ERROR',
+        message: err?.message || 'Server-side PayPal order capture failed.'
       });
     }
   });

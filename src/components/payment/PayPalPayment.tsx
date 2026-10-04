@@ -36,6 +36,7 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
         const email = data.merchantEmail || 'kraezelvbeatz@gmail.com';
         
         console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_CLIENT_ID_PRESENT=${!!rawId}`);
+        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_HAS_SERVER_SECRET=${!!data.hasServerSecret}`);
         setClientId(rawId);
         setMerchantEmail(email);
       })
@@ -85,6 +86,7 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
         buttonContainerRef.current.innerHTML = '';
         
         try {
+          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTON_INITIALIZED');
           const buttons = paypal.Buttons({
             style: {
               layout: 'vertical',
@@ -102,27 +104,33 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
                 });
 
                 const orderRes = await res.json();
+                
+                if (!res.ok || orderRes.success === false) {
+                  const errName = orderRes.error || 'CREATE_ORDER_FAILED';
+                  const errMsg = orderRes.message || `Server returned HTTP ${res.status}`;
+                  console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED: HTTP ${res.status} - ${errName}: ${errMsg}`);
+                  setLoadError(`Order creation error (${errName}): ${errMsg}`);
+                  throw new Error(`Order Creation Error: ${errMsg}`);
+                }
+
                 if (orderRes.id) {
-                  console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS');
+                  console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Server Order ID: ${orderRes.id})`);
                   return orderRes.id;
                 }
 
-                // SDK creation fallback using server-validated values
-                console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (SDK Fallback)');
+                // Single-Party SDK Creation Fallback (no unprocessable client payee override)
+                console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Single-Party Client Order)');
                 return actions.order.create({
                   purchase_units: [{
                     description: description,
                     amount: {
                       currency_code: currency,
                       value: amount.toFixed(2).toString(),
-                    },
-                    payee: {
-                      email_address: merchantEmail || 'kraezelvbeatz@gmail.com'
                     }
                   }]
                 });
-              } catch (err) {
-                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED', err);
+              } catch (err: any) {
+                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED:', err?.message || err);
                 throw err;
               }
             },
@@ -146,20 +154,31 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
 
                 const verifiedResult = await captureRes.json();
 
+                if (!captureRes.ok || verifiedResult.success === false) {
+                  const errName = verifiedResult.error || 'CAPTURE_FAILED';
+                  const errMsg = verifiedResult.message || `Server returned HTTP ${captureRes.status}`;
+                  console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: HTTP ${captureRes.status} - ${errName}: ${errMsg}`);
+                  onError(new Error(`Capture Verification Error: ${errMsg}`));
+                  return;
+                }
+
                 if (verifiedResult.success && (verifiedResult.status === 'COMPLETED' || captureData?.status === 'COMPLETED')) {
                   console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_SUCCESS');
                   onSuccess(captureData || verifiedResult);
                 } else {
-                  console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: Incomplete capture status');
-                  onError(new Error('PayPal capture verification failed.'));
+                  console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: Status incomplete');
+                  onError(new Error('PayPal capture status incomplete.'));
                 }
-              } catch (err) {
-                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED', err);
+              } catch (err: any) {
+                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED:', err?.message || err);
                 onError(err);
               }
             },
+            onCancel: (data: any) => {
+              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CHECKOUT_CANCELLED');
+            },
             onError: (err: any) => {
-              console.error('[PAYPAL_DIAGNOSTIC] PayPal SDK button error:', err);
+              console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CHECKOUT_ERROR:', err?.message || err);
               onError(err);
             }
           });

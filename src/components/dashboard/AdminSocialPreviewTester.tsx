@@ -21,7 +21,7 @@ export const AdminSocialPreviewTester = () => {
 
   const selectedBeat = beats.find(b => b.id === selectedBeatId) || beats[0];
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://kraezelvbeatz.com';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const shareUrl = selectedBeat ? `${baseUrl}/?beat=${selectedBeat.id}` : '';
 
   const isPublicArtwork = selectedBeat?.artworkUrl?.startsWith('http://') || selectedBeat?.artworkUrl?.startsWith('https://');

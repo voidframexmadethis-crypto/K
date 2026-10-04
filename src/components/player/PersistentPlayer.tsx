@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAudioStore } from '../../store/useAudioStore';
 import { LicensingModal } from '../beats/LicensingModal';
+import { FreeDownloadModal } from '../beats/FreeDownloadModal';
 import { BeatShareModal } from './BeatShareModal';
 import { SpotifyMasteringStudioModal } from './SpotifyMasteringStudioModal';
 import { hiFiAudioEngine, MASTER_PRESETS, MasterPresetId } from '../../lib/hiFiAudioEngine';
@@ -21,6 +22,7 @@ export const PersistentPlayer = () => {
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isLicenseOpen, setIsLicenseOpen] = useState(false);
+  const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isMasteringStudioOpen, setIsMasteringStudioOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
@@ -309,20 +311,31 @@ export const PersistentPlayer = () => {
             </button>
 
             {/* If track has Free Download enabled, show Free Download Button */}
-            {currentBeat.isFree && (
-              <a
-                href={currentBeat.audioUrl || '#'}
-                download={`${currentBeat.title}_Free.mp3`}
-                className="px-3.5 py-2.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 shrink-0"
+            {(currentBeat.isFree || currentBeat.freeDownloadEnabled) && (
+              <button
+                onClick={() => {
+                  if (currentBeat.freeDownloadEmailRequired || currentBeat.freeDownloadType === 'email') {
+                    setIsFreeModalOpen(true);
+                  } else {
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = currentBeat.audioUrl || '#';
+                    downloadLink.download = `${currentBeat.title}_Free.mp3`;
+                    downloadLink.target = '_blank';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                  }
+                }}
+                className="px-3.5 py-2.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <Download size={12} /> Free MP3
-              </a>
+              </button>
             )}
 
             {/* Paid Licensing Button */}
             <button 
               onClick={() => setIsLicenseOpen(true)}
-              className="px-5 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all active:scale-95 shadow-2xl flex items-center gap-1.5 shrink-0"
+              className="px-5 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all active:scale-95 shadow-2xl flex items-center gap-1.5 shrink-0 cursor-pointer"
             >
               <ShoppingBag size={12} /> License
             </button>
@@ -335,6 +348,13 @@ export const PersistentPlayer = () => {
         beat={currentBeat}
         isOpen={isLicenseOpen}
         onClose={() => setIsLicenseOpen(false)}
+      />
+
+      {/* Free Download Email Gate Modal */}
+      <FreeDownloadModal
+        beat={currentBeat}
+        isOpen={isFreeModalOpen}
+        onClose={() => setIsFreeModalOpen(false)}
       />
 
       {/* BeatStars-style Track Share & Embed Modal */}

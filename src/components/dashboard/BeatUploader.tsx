@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
 import { uploadToR2AndArchive } from '../../lib/storageEngine';
+import { BEEHIIV_CONFIG } from '../../config/beehiiv';
+import { Beat } from '../../types';
 import { 
   Upload, Image as ImageIcon, Music, Tag, DollarSign, CheckCircle, 
   ArrowRight, ArrowLeft, Shield, Globe, Settings, FileAudio, 
@@ -29,10 +31,23 @@ const sectionTabs = [
   { id: 8, name: 'Publish', icon: CheckCircle },
 ];
 
-export const BeatUploader = () => {
+export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
   const addBeat = useBeatCatalogStore(state => state.addBeat);
+  const updateBeat = useBeatCatalogStore(state => state.updateBeat);
+  const findBeatByIdempotencyKey = useBeatCatalogStore(state => state.findBeatByIdempotencyKey);
+
   const [activeSection, setActiveSection] = useState(1);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Synchronous duplicate submission protection state & refs
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPublishSuccess, setIsPublishSuccess] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  // Ref lock is 100% synchronous at method entry before any React re-renders or async events
+  const isSubmittingRef = useRef(false);
+  const currentSubmissionIdRef = useRef<string | null>(null);
+  const createdBeatResultRef = useRef<Beat | null>(null);
 
   // --- COMPREHENSIVE FORM STATE FOR ALL FEATURES ---
   const [formData, setFormData] = useState({
@@ -80,6 +95,8 @@ export const BeatUploader = () => {
     directPriceLabel: 'Direct Track Buyout',
     directCheckoutUrl: '',
     isFreeDownload: false,
+    freeDownloadEmailRequired: false,
+    beehiivFormUrl: BEEHIIV_CONFIG.FORM_ACTION_URL,
     freeUnlockMechanic: 'email',
     mp3LeasePrice: '29.99',
     wavLeasePrice: '49.99',
@@ -97,7 +114,7 @@ export const BeatUploader = () => {
     isPublic: true,
     releaseDate: new Date().toISOString().slice(0, 10),
     releaseTime: '12:00',
-    vipShareLink: 'https://kraezelv.com/vip/beat/valkyrie?token=sec_98124x',
+    vipShareLink: typeof window !== 'undefined' ? `${window.location.origin}/vip/beat/valkyrie?token=sec_98124x` : '',
     isPasswordProtected: false,
     previewPassword: '',
 
@@ -185,7 +202,8 @@ export const BeatUploader = () => {
     }));
   };
 
-  const iframeCode = `<iframe src="https://kraezelv.com/embed/beat/${formData.title.toLowerCase() || 'track'}?theme=dark" width="${formData.embedWidth}%" height="${formData.embedHeight}" frameborder="0" allow="autoplay"></iframe>`;
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const iframeCode = `<iframe src="${currentOrigin}/embed/beat/${formData.title.toLowerCase() || 'track'}?theme=dark" width="${formData.embedWidth}%" height="${formData.embedHeight}" frameborder="0" allow="autoplay"></iframe>`;
 
   // Validation Checks for Readiness Checklist
   const isAudioReady = !!formData.audioFileName;
@@ -194,42 +212,154 @@ export const BeatUploader = () => {
   const isPricingReady = formData.isFreeDownload || (formData.pricingMode === 'direct' ? parseFloat(formData.directPrice) > 0 : (parseFloat(formData.mp3LeasePrice) > 0 || parseFloat(formData.wavLeasePrice) > 0));
   const isStoreReady = true;
 
-  const handlePublish = () => {
-    const newBeat = {
-      id: `user-beat-${Date.now()}`,
-      title: formData.title || 'Untitled Beat',
-      producerId: 'KRAEZELVbeatz',
-      bpm: parseInt(formData.bpm) || 140,
-      key: formData.key || 'C Minor',
-      genre: formData.primaryGenre || 'Trap',
-      subgenre: formData.subGenre,
-      tags: formData.tags || ['NEW'],
-      moods: formData.moods || ['Dark'],
-      slug: (formData.title || 'beat').toLowerCase().replace(/\s+/g, '-'),
-      isPrivate: !formData.isPublic,
-      isBootleg: false,
-      instruments: formData.instruments || [],
-      audioUrl: formData.audioUrl || '',
-      artworkUrl: formData.artworkUrl || '',
-      stemsUrl: formData.stemsUrl || '',
-      isFree: formData.isFreeDownload,
-      playsCount: 0,
-      licenses: formData.pricingMode === 'direct' ? {
-        basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
-        premium: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
-        unlimited: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
-        exclusive: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
-      } : {
-        basic: { price: parseFloat(formData.mp3LeasePrice) || 29.99, enabled: formData.enabledLicenses.basic },
-        premium: { price: parseFloat(formData.wavLeasePrice) || 49.99, enabled: formData.enabledLicenses.premium },
-        unlimited: { price: parseFloat(formData.stemsLeasePrice) || 99.99, enabled: formData.enabledLicenses.unlimited },
-        exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
-      },
-      createdAt: new Date().toISOString(),
-      published: true,
-    };
-    addBeat(newBeat);
-    alert(`Beat "${newBeat.title}" has been published live to Cloudflare R2 & Internet Archive Vault!`);
+  const handlePublish = async (e?: React.SyntheticEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // 1. SYNCHRONOUS LOCK CHECK - Must be 100% synchronous at entry
+    if (isSubmittingRef.current || isSubmitting) {
+      console.warn('[DUPLICATE_PREVENTION] Submission already in progress. Tap ignored.');
+      return;
+    }
+
+    if (isPublishSuccess && createdBeatResultRef.current) {
+      console.log('[DUPLICATE_PREVENTION] Beat already published successfully.', createdBeatResultRef.current.id);
+      return;
+    }
+
+    // 2. Establish Lock SYNCHRONOUSLY
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    setSubmissionError(null);
+
+    // 3. Generate or retrieve unique Idempotency Key for this submission attempt
+    if (!currentSubmissionIdRef.current) {
+      currentSubmissionIdRef.current = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    }
+    const idempotencyKey = currentSubmissionIdRef.current;
+
+    try {
+      // 4. IDEMPOTENCY CHECK - Check if beat with this idempotency key already exists in catalog
+      const existingInCatalog = findBeatByIdempotencyKey(idempotencyKey);
+      if (existingInCatalog) {
+        console.log('[DUPLICATE_PREVENTION] Idempotency hit: Beat already exists in store.', existingInCatalog.id);
+        createdBeatResultRef.current = existingInCatalog;
+        setIsPublishSuccess(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 5. Handle Editing Existing Beat vs Creating New Beat
+      const editingId = editingBeat?.id || (formData as any).editingBeatId;
+      if (editingId) {
+        updateBeat(editingId, {
+          title: formData.title || 'Untitled Beat',
+          bpm: parseInt(formData.bpm) || 140,
+          key: formData.key || 'C Minor',
+          genre: formData.primaryGenre || 'Trap',
+          subgenre: formData.subGenre,
+          tags: formData.tags || ['NEW'],
+          moods: formData.moods || ['Dark'],
+          instruments: formData.instruments || [],
+          isFree: formData.isFreeDownload,
+          freeDownloadEnabled: formData.isFreeDownload,
+          freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
+          beehiivFormUrl: formData.beehiivFormUrl || '',
+          licenses: formData.pricingMode === 'direct' ? {
+            basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
+            premium: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+            unlimited: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+            exclusive: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+          } : {
+            basic: { price: parseFloat(formData.mp3LeasePrice) || 29.99, enabled: formData.enabledLicenses.basic },
+            premium: { price: parseFloat(formData.wavLeasePrice) || 49.99, enabled: formData.enabledLicenses.premium },
+            unlimited: { price: parseFloat(formData.stemsLeasePrice) || 99.99, enabled: formData.enabledLicenses.unlimited },
+            exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
+          }
+        });
+        setIsPublishSuccess(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 6. Create NEW Beat Record
+      const newBeatId = `user-beat-${Date.now()}`;
+      const newBeat: Beat = {
+        id: newBeatId,
+        idempotencyKey,
+        title: formData.title || 'Untitled Beat',
+        producerId: 'KRAEZELVbeatz',
+        bpm: parseInt(formData.bpm) || 140,
+        key: formData.key || 'C Minor',
+        genre: formData.primaryGenre || 'Trap',
+        subgenre: formData.subGenre,
+        tags: formData.tags || ['NEW'],
+        moods: formData.moods || ['Dark'],
+        slug: (formData.title || 'beat').toLowerCase().replace(/\s+/g, '-'),
+        isPrivate: !formData.isPublic,
+        isBootleg: false,
+        instruments: formData.instruments || [],
+        audioUrl: formData.audioUrl || '',
+        artworkUrl: formData.artworkUrl || '',
+        stemsUrl: formData.stemsUrl || '',
+        isFree: formData.isFreeDownload,
+        freeDownloadEnabled: formData.isFreeDownload,
+        freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
+        freeDownloadType: (formData.freeDownloadEmailRequired ? 'email' : 'none') as 'email' | 'social' | 'none',
+        beehiivFormUrl: formData.beehiivFormUrl || '',
+        playsCount: 0,
+        licenses: formData.pricingMode === 'direct' ? {
+          basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
+          premium: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+          unlimited: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+          exclusive: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
+        } : {
+          basic: { price: parseFloat(formData.mp3LeasePrice) || 29.99, enabled: formData.enabledLicenses.basic },
+          premium: { price: parseFloat(formData.wavLeasePrice) || 49.99, enabled: formData.enabledLicenses.premium },
+          unlimited: { price: parseFloat(formData.stemsLeasePrice) || 99.99, enabled: formData.enabledLicenses.unlimited },
+          exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
+        },
+        createdAt: new Date().toISOString(),
+        published: true,
+      };
+
+      // Notify backend idempotency endpoint
+      try {
+        await fetch('/api/beats/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idempotencyKey, beatData: newBeat })
+        }).catch(() => {});
+      } catch (e) {}
+
+      const createdBeat = addBeat(newBeat);
+      createdBeatResultRef.current = createdBeat;
+      setIsPublishSuccess(true);
+      setIsSubmitting(false);
+
+    } catch (err: any) {
+      console.error('[DUPLICATE_PREVENTION] Upload Error:', err);
+      setSubmissionError(err?.message || 'Publish operation failed. Please try again.');
+      // On failure: release lock so user can retry safely
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetForNewBeat = () => {
+    isSubmittingRef.current = false;
+    currentSubmissionIdRef.current = null;
+    createdBeatResultRef.current = null;
+    setIsSubmitting(false);
+    setIsPublishSuccess(false);
+    setSubmissionError(null);
+    setFormData(prev => ({
+      ...prev,
+      title: 'NEW BEAT ' + Math.floor(Math.random() * 1000)
+    }));
+    setActiveSection(1);
   };
 
   return (
@@ -578,31 +708,85 @@ export const BeatUploader = () => {
               </button>
             </div>
 
-            {/* FREE RELEASE TOGGLE */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-6 bg-white/[0.02] border border-white/10 rounded-sm">
-              <div className="space-y-1">
-                <span className="text-lg font-black uppercase text-white">Free Download Release</span>
-                <p className="text-xs text-white/40 uppercase tracking-wider">
-                  Allow non-commercial downloads in exchange for email unlocks or social follows.
-                </p>
+            {/* FREE RELEASE TOGGLE & EMAIL GATE MODE */}
+            <div className="flex flex-col gap-4 p-6 bg-white/[0.02] border border-white/10 rounded-sm">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="space-y-1">
+                  <span className="text-lg font-black uppercase text-white">Free Download Release</span>
+                  <p className="text-xs text-white/40 uppercase tracking-wider">
+                    Allow instant or email-gated free downloads alongside your paid license tiers.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
+                    {formData.isFreeDownload ? 'FREE ACTIVE' : 'OFF'}
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={() => setFormData({ ...formData, isFreeDownload: !formData.isFreeDownload })}
+                    className={cn("w-14 h-7 rounded-full relative transition-all", formData.isFreeDownload ? "bg-purple-600" : "bg-white/10")}
+                  >
+                    <div className={cn("absolute top-1 w-5 h-5 bg-white rounded-full transition-all", formData.isFreeDownload ? "right-1" : "left-1")} />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
-                  {formData.isFreeDownload ? 'FREE ACTIVE' : 'PAID ONLY'}
-                </span>
-                <button 
-                  type="button"
-                  onClick={() => setFormData({ ...formData, isFreeDownload: !formData.isFreeDownload })}
-                  className={cn("w-14 h-7 rounded-full relative transition-all", formData.isFreeDownload ? "bg-purple-600" : "bg-white/10")}
-                >
-                  <div className={cn("absolute top-1 w-5 h-5 bg-white rounded-full transition-all", formData.isFreeDownload ? "right-1" : "left-1")} />
-                </button>
-              </div>
+              {formData.isFreeDownload && (
+                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-sm space-y-4 mt-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-purple-300 block">
+                    Free Download Requirement Mode
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, freeDownloadEmailRequired: false })}
+                      className={cn(
+                        "p-3 border text-left text-xs font-black uppercase tracking-wider rounded-sm transition-all cursor-pointer",
+                        !formData.freeDownloadEmailRequired
+                          ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
+                          : "bg-white/5 border-white/10 text-white/50 hover:text-white"
+                      )}
+                    >
+                      ○ No Email Required (Direct Instant Download)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, freeDownloadEmailRequired: true })}
+                      className={cn(
+                        "p-3 border text-left text-xs font-black uppercase tracking-wider rounded-sm transition-all cursor-pointer",
+                        formData.freeDownloadEmailRequired
+                          ? "bg-purple-500/20 border-purple-500 text-purple-300"
+                          : "bg-white/5 border-white/10 text-white/50 hover:text-white"
+                      )}
+                    >
+                      ● Email Required (Beehiiv Audience Gate)
+                    </button>
+                  </div>
+
+                  {formData.freeDownloadEmailRequired && (
+                    <div className="space-y-1 pt-2 border-t border-purple-500/20">
+                      <label className="text-[9px] font-black uppercase tracking-widest text-white/70 block">
+                        Beehiiv Subscribe Embed Form URL (Optional)
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.beehiivFormUrl}
+                        onChange={(e) => setFormData({ ...formData, beehiivFormUrl: e.target.value })}
+                        placeholder="e.g. https://embeds.beehiiv.com/publication_id"
+                        className="w-full bg-black/60 border border-white/20 p-2.5 text-xs font-mono text-white outline-none focus:border-purple-400"
+                      />
+                      <p className="text-[8px] font-mono text-white/40 uppercase">
+                        If provided, submitted emails will automatically route to your Beehiiv publication audience.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* DIRECT PRICING MODE CONFIGURATION */}
-            {!formData.isFreeDownload && formData.pricingMode === 'direct' && (
+            {formData.pricingMode === 'direct' && (
               <div className="p-6 bg-emerald-500/5 border border-emerald-500/30 rounded-sm space-y-6">
                 <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
                   <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Direct Single Buyout Pricing</span>
@@ -651,7 +835,7 @@ export const BeatUploader = () => {
             )}
 
             {/* TIERED LICENSING MATRIX WITH INDIVIDUAL ENABLE/DISABLE TOGGLES */}
-            {!formData.isFreeDownload && formData.pricingMode === 'tiered' && (
+            {formData.pricingMode === 'tiered' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black uppercase tracking-widest text-white/60">Quick Pricing Presets</span>
@@ -1054,6 +1238,12 @@ export const BeatUploader = () => {
             </div>
           </div>
 
+          {submissionError && (
+            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-sm text-xs font-mono text-red-400">
+              ⚠️ {submissionError}
+            </div>
+          )}
+
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-1">
               <h4 className="text-xl font-black uppercase text-white">Publish Live To Catalog</h4>
@@ -1062,12 +1252,52 @@ export const BeatUploader = () => {
               </p>
             </div>
 
-            <button 
-              onClick={handlePublish}
-              className="w-full sm:w-auto px-16 py-6 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-[0.3em] text-xs transition-all shadow-2xl active:scale-95 shrink-0 flex items-center justify-center gap-3"
-            >
-              <CheckCircle size={18} /> PUBLISH PROJECT
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              <button 
+                type="button"
+                disabled={isSubmitting || isPublishSuccess}
+                onClick={handlePublish}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
+                className={cn(
+                  "w-full sm:w-auto px-16 py-6 font-black uppercase tracking-[0.3em] text-xs transition-all shadow-2xl shrink-0 flex items-center justify-center gap-3 rounded-sm",
+                  (isSubmitting || isPublishSuccess)
+                    ? "bg-purple-900/50 text-white/50 cursor-not-allowed border border-purple-500/30"
+                    : "bg-purple-600 hover:bg-purple-500 text-white active:scale-95 cursor-pointer"
+                )}
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>PUBLISHING BEAT...</span>
+                  </>
+                ) : isPublishSuccess ? (
+                  <>
+                    <CheckCircle size={18} className="text-emerald-400" />
+                    <span>BEAT PUBLISHED LIVE!</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={18} />
+                    <span>PUBLISH PROJECT</span>
+                  </>
+                )}
+              </button>
+
+              {isPublishSuccess && (
+                <button
+                  type="button"
+                  onClick={handleResetForNewBeat}
+                  className="w-full sm:w-auto px-8 py-6 bg-white/10 hover:bg-white text-white hover:text-black font-black uppercase tracking-[0.2em] text-xs transition-all border border-white/20 shrink-0 cursor-pointer rounded-sm"
+                >
+                  + Create Another Beat
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

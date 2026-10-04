@@ -5,12 +5,35 @@ import { Beat } from '../../types';
 import { useAudioStore } from '../../store/useAudioStore';
 import { LicensingModal } from './LicensingModal';
 import { BeatShareModal } from '../player/BeatShareModal';
+import { FreeDownloadModal } from './FreeDownloadModal';
 
 export const BeatCard = ({ beat }: { beat: Beat }) => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const isCurrent = currentBeat?.id === beat.id;
   const [isLicensingOpen, setIsLicensingOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
+
+  const isFree = beat.isFree || beat.freeDownloadEnabled;
+  const isEmailRequired = beat.freeDownloadEmailRequired || beat.freeDownloadType === 'email';
+
+  const handleFreeDownloadClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isEmailRequired) {
+      setIsFreeModalOpen(true);
+    } else {
+      // Direct instant download without email
+      const downloadLink = document.createElement('a');
+      downloadLink.href = beat.audioUrl || '#';
+      downloadLink.download = `${beat.title}_Free.mp3`;
+      downloadLink.target = '_blank';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+  };
 
   return (
     <div className="group flex flex-col gap-5">
@@ -54,7 +77,7 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
            <span className="text-[8px] font-bold uppercase tracking-widest bg-white text-black px-2 py-1">
               {beat.bpm} BPM
            </span>
-           {beat.isFree && (
+           {isFree && (
              <span className="text-[8px] font-bold uppercase tracking-widest bg-emerald-500 text-black px-2 py-1">
                 FREE MP3
              </span>
@@ -79,15 +102,13 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
 
         {/* Actions Bar: Simultaneous Free Download & Paid License Button */}
         <div className="flex items-center gap-2">
-          {beat.isFree && (
-            <a
-              href={beat.audioUrl || '#'}
-              download={`${beat.title}_Free.mp3`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-1 px-3 py-2 bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/30 transition-all text-center flex items-center justify-center gap-1.5"
+          {isFree && (
+            <button
+              onClick={handleFreeDownloadClick}
+              className="flex-1 px-3 py-2 bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/30 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Download size={12} /> Free MP3
-            </a>
+            </button>
           )}
 
           <button 
@@ -96,7 +117,7 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
               e.stopPropagation();
               setIsLicensingOpen(true);
             }}
-            className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all text-center flex items-center justify-center gap-1.5"
+            className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <ShoppingCart size={12} /> Buy ${beat.licenses?.basic?.price || '29.99'}
           </button>
@@ -113,6 +134,12 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
         beat={beat}
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
+      />
+
+      <FreeDownloadModal
+        beat={beat}
+        isOpen={isFreeModalOpen}
+        onClose={() => setIsFreeModalOpen(false)}
       />
     </div>
   );

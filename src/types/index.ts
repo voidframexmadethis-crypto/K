@@ -21,6 +21,7 @@ export interface CreativeVariant {
 
 export interface Beat {
   id: string;
+  idempotencyKey?: string;
   title: string;
   producerId: string;
   bpm: number;
@@ -37,8 +38,11 @@ export interface Beat {
   videoUrl?: string; // YouTube/Vimeo
   artworkUrl: string;
   isFree: boolean;
+  freeDownloadEnabled?: boolean;
+  freeDownloadEmailRequired?: boolean;
   freeDownloadType?: 'email' | 'social' | 'none';
   freeDownloadLimit?: 'tagged' | 'untagged';
+  beehiivFormUrl?: string;
   negotiable?: boolean;
   licenses: {
     basic: { price: number; enabled: boolean };

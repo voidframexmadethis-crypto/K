@@ -34,6 +34,17 @@ export interface OrderRecord {
   timestamp?: any;
 }
 
+export interface LeadSubscriberRecord {
+  id?: string;
+  email: string;
+  beatId: string;
+  beatTitle: string;
+  source: string;
+  storefrontUrl?: string;
+  beatUrl?: string;
+  timestamp?: any;
+}
+
 export interface VRReviewRecord {
   id?: string;
   beatId: string;
@@ -65,6 +76,27 @@ export async function logAnalyticsEvent(data: Omit<AnalyticsEventData, 'id' | 't
     });
   } catch (err) {
     console.warn('Analytics event logging fallback:', err);
+  }
+}
+
+// Helper to record a lead subscriber (Beehiiv / Free Download Gate)
+export async function recordLeadSubscriber(lead: Omit<LeadSubscriberRecord, 'id' | 'timestamp'>) {
+  try {
+    const docRef = await addDoc(collection(db, 'subscribers'), {
+      ...lead,
+      timestamp: serverTimestamp()
+    });
+
+    await logAnalyticsEvent({
+      eventType: 'free_download',
+      beatId: lead.beatId,
+      beatTitle: lead.beatTitle
+    });
+
+    return docRef.id;
+  } catch (err) {
+    console.warn('Failed to record lead subscriber:', err);
+    return null;
   }
 }
 
