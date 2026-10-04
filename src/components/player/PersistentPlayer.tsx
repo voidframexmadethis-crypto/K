@@ -1,7 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize2, Download, Share2, Heart, Shuffle, Repeat, ListMusic, X, Check, ShoppingBag } from 'lucide-react';
+import { 
+  Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize2, 
+  Download, Share2, Heart, Shuffle, Repeat, ListMusic, X, Check, 
+  ShoppingBag, Sparkles, Cpu, Sliders, Radio
+} from 'lucide-react';
 import { useAudioStore } from '../../store/useAudioStore';
 import { LicensingModal } from '../beats/LicensingModal';
+import { BeatShareModal } from './BeatShareModal';
+import { hiFiAudioEngine, MASTER_PRESETS, MasterPresetId } from '../../lib/hiFiAudioEngine';
 import { cn } from '../../lib/utils';
 
 export const PersistentPlayer = () => {
@@ -14,12 +20,18 @@ export const PersistentPlayer = () => {
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isLicenseOpen, setIsLicenseOpen] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('studio_master');
+  const [showDspMenu, setShowDspMenu] = useState(false);
 
   useEffect(() => {
     if (audioRef.current) {
+      // Initialize 32-bit DSP Engine
+      hiFiAudioEngine.initialize(audioRef.current);
+
       if (isPlaying) {
+        hiFiAudioEngine.resume();
         audioRef.current.play().catch(() => setPlaying(false));
       } else {
         audioRef.current.pause();
@@ -45,6 +57,12 @@ export const PersistentPlayer = () => {
     }
   };
 
+  const handlePresetChange = (presetId: MasterPresetId) => {
+    setActiveDspPreset(presetId);
+    hiFiAudioEngine.applyPreset(presetId);
+    setShowDspMenu(false);
+  };
+
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
@@ -52,10 +70,7 @@ export const PersistentPlayer = () => {
   };
 
   const handleShare = () => {
-    const url = `${window.location.origin}/beat/${currentBeat?.slug || 'track'}`;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    setIsShareOpen(true);
   };
 
   const handleSeek = (percentage: number) => {
@@ -69,6 +84,7 @@ export const PersistentPlayer = () => {
   if (!currentBeat) return null;
 
   const currentProgressPercent = duration ? (progress / duration) * 100 : 0;
+  const currentDspObject = MASTER_PRESETS.find(p => p.id === activeDspPreset) || MASTER_PRESETS[0];
 
   // Digital Waveform Bars pattern
   const waveformBarHeights = [
@@ -121,44 +137,79 @@ export const PersistentPlayer = () => {
       </div>
 
       {/* Sticky Bottom Player Canvas */}
-      <div className="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-2xl border-t border-white/10 z-[200] py-4 shadow-[0_-20px_80px_rgba(0,0,0,0.9)]">
+      <div className="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-2xl border-t border-white/10 z-[200] py-3 shadow-[0_-20px_80px_rgba(0,0,0,0.9)]">
         <audio
           ref={audioRef}
           src={currentBeat.audioUrl}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={next}
+          crossOrigin="anonymous"
         />
         
-        <div className="max-w-[1800px] mx-auto px-6 md:px-12 grid grid-cols-12 gap-8 items-center">
-          {/* Track Info */}
-          <div className="col-span-3 flex items-center gap-6 min-w-0">
+        <div className="max-w-[1800px] mx-auto px-6 md:px-12 grid grid-cols-12 gap-6 items-center">
+          {/* Track Info & DSP Engine Selector */}
+          <div className="col-span-3 flex items-center gap-5 min-w-0">
             <div className="relative group overflow-hidden shrink-0">
               <img 
                 src={currentBeat.artworkUrl} 
                 alt={currentBeat.title}
                 className="w-14 h-14 md:w-16 md:h-16 object-cover bg-neutral-900 border border-white/10 grayscale"
               />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                 <Maximize2 size={16} className="text-white" />
-              </div>
             </div>
+
             <div className="min-w-0 flex flex-col gap-1">
               <h4 className="text-base md:text-lg font-black text-white truncate uppercase tracking-tighter leading-tight">
                 {currentBeat.title}
               </h4>
-              <div className="flex items-center gap-2 text-[8px] md:text-[9px] text-white/40 font-bold uppercase tracking-[0.2em] truncate">
+
+              <div className="flex items-center gap-2 text-[8px] md:text-[9px] text-white/40 font-bold uppercase tracking-[0.15em] truncate">
                 <span>{currentBeat.producerId}</span>
                 <span className="w-px h-2 bg-white/10" />
                 <span>{currentBeat.bpm} BPM</span>
-                <span className="w-px h-2 bg-white/10" />
-                <span>{currentBeat.key}</span>
+              </div>
+
+              {/* Master Audio DSP Badge */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowDspMenu(!showDspMenu)}
+                  className="px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-emerald-500/20 border border-purple-500/30 text-purple-300 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 hover:border-purple-400 transition-all rounded-sm mt-0.5"
+                >
+                  <Sparkles size={10} className="text-purple-400" />
+                  {currentDspObject.badge}
+                </button>
+
+                {/* DSP Presets Selector Menu */}
+                {showDspMenu && (
+                  <div className="absolute left-0 bottom-full mb-2 w-72 bg-neutral-950 border border-white/20 p-3 shadow-2xl z-[220] flex flex-col gap-2">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-purple-400 border-b border-white/10 pb-2">
+                      Hi-Fi Audio DSP Processing Engine
+                    </div>
+                    {MASTER_PRESETS.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => handlePresetChange(p.id)}
+                        className={`p-2 border text-left text-[10px] font-bold transition-all flex flex-col gap-0.5 ${
+                          activeDspPreset === p.id 
+                            ? 'bg-purple-600 text-white border-purple-400' 
+                            : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span>{p.name}</span>
+                          <span className="text-[8px] font-mono opacity-80">{p.badge}</span>
+                        </div>
+                        <span className="text-[8px] opacity-60 font-normal">{p.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Central Waveform Tracker & Controls */}
-          <div className="col-span-6 flex flex-col items-center gap-3">
+          <div className="col-span-6 flex flex-col items-center gap-2">
             <div className="flex items-center gap-8">
               <button 
                 onClick={toggleShuffle}
@@ -206,7 +257,7 @@ export const PersistentPlayer = () => {
 
               {/* Scrubbable Waveform Display */}
               <div 
-                className="flex-1 h-8 flex items-center gap-[2px] relative cursor-pointer group px-1"
+                className="flex-1 h-7 flex items-center gap-[2px] relative cursor-pointer group px-1"
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const clickX = e.clientX - rect.left;
@@ -237,12 +288,12 @@ export const PersistentPlayer = () => {
             </div>
           </div>
 
-          {/* Secondary Utilities & Quick Licensing Shortcut */}
-          <div className="col-span-3 flex items-center justify-end gap-4 md:gap-6">
+          {/* Secondary Utilities, Free Download & Paid Licensing */}
+          <div className="col-span-3 flex items-center justify-end gap-3 md:gap-4">
             {/* Volume Control */}
-            <div className="hidden xl:flex items-center gap-3 group">
+            <div className="hidden xl:flex items-center gap-2 group">
               <Volume2 size={16} className="text-white/40 group-hover:text-white transition-colors" />
-              <div className="w-20 h-1 bg-white/10 relative cursor-pointer">
+              <div className="w-16 h-1 bg-white/10 relative cursor-pointer">
                 <div 
                   className="absolute top-0 left-0 h-full bg-white" 
                   style={{ width: `${volume * 100}%` }}
@@ -260,19 +311,11 @@ export const PersistentPlayer = () => {
             </div>
 
             <button 
-              onClick={handleShare}
+              onClick={() => setIsShareOpen(true)}
               title="Share Track"
               className="p-2 text-white/40 hover:text-white transition-colors relative"
             >
-              {copiedLink ? <Check size={16} className="text-emerald-500" /> : <Share2 size={16} />}
-            </button>
-
-            <button 
-              onClick={() => setIsLiked(!isLiked)}
-              title="Favorite"
-              className={cn("p-2 transition-colors", isLiked ? "text-white" : "text-white/40 hover:text-white")}
-            >
-              <Heart size={16} fill={isLiked ? "white" : "none"} />
+              <Share2 size={16} />
             </button>
 
             <button 
@@ -282,10 +325,21 @@ export const PersistentPlayer = () => {
               <ListMusic size={16} />
             </button>
 
-            {/* Constant Licensing Shortcut Button */}
+            {/* If track has Free Download enabled, show Free Download Button */}
+            {currentBeat.isFree && (
+              <a
+                href={currentBeat.audioUrl || '#'}
+                download={`${currentBeat.title}_Free.mp3`}
+                className="px-3.5 py-2.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 shrink-0"
+              >
+                <Download size={12} /> Free MP3
+              </a>
+            )}
+
+            {/* Paid Licensing Button */}
             <button 
               onClick={() => setIsLicenseOpen(true)}
-              className="px-6 md:px-8 py-3 bg-white text-black text-[9px] font-black uppercase tracking-[0.3em] hover:bg-neutral-200 transition-all active:scale-95 shadow-2xl flex items-center gap-2 shrink-0"
+              className="px-5 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all active:scale-95 shadow-2xl flex items-center gap-1.5 shrink-0"
             >
               <ShoppingBag size={12} /> License
             </button>
@@ -299,7 +353,13 @@ export const PersistentPlayer = () => {
         isOpen={isLicenseOpen}
         onClose={() => setIsLicenseOpen(false)}
       />
+
+      {/* BeatStars-style Track Share & Embed Modal */}
+      <BeatShareModal 
+        beat={currentBeat}
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+      />
     </>
   );
 };
-

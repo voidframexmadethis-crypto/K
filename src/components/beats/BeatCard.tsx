@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, ShoppingCart, Heart, Share2 } from 'lucide-react';
+import { Play, ShoppingCart, Heart, Share2, Download } from 'lucide-react';
 import { Beat } from '../../types';
 import { useAudioStore } from '../../store/useAudioStore';
 import { LicensingModal } from './LicensingModal';
+import { BeatShareModal } from '../player/BeatShareModal';
 
 export const BeatCard = ({ beat }: { beat: Beat }) => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const isCurrent = currentBeat?.id === beat.id;
   const [isLicensingOpen, setIsLicensingOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   return (
     <div className="group flex flex-col gap-5">
@@ -35,49 +37,82 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
            <button className="w-10 h-10 bg-black/80 backdrop-blur-md border border-white/10 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors">
               <Heart size={18} />
            </button>
-           <button className="w-10 h-10 bg-black/80 backdrop-blur-md border border-white/10 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors">
+           <button 
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               setIsShareOpen(true);
+             }}
+             className="w-10 h-10 bg-black/80 backdrop-blur-md border border-white/10 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors"
+           >
               <Share2 size={18} />
            </button>
         </div>
 
         {/* Bottom Tag */}
-        <div className="absolute bottom-4 left-4">
+        <div className="absolute bottom-4 left-4 flex items-center gap-2">
            <span className="text-[8px] font-bold uppercase tracking-widest bg-white text-black px-2 py-1">
               {beat.bpm} BPM
            </span>
+           {beat.isFree && (
+             <span className="text-[8px] font-bold uppercase tracking-widest bg-emerald-500 text-black px-2 py-1">
+                FREE MP3
+             </span>
+           )}
         </div>
       </div>
 
-      {/* Info Container */}
-      <div className="flex justify-between items-start">
-        <div className="min-w-0">
-          <Link to="/audio-player">
-            <h3 className="text-lg font-bold text-white uppercase tracking-tighter truncate group-hover:text-white/80 transition-colors">
-              {beat.title}
-            </h3>
-          </Link>
-          <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] mt-1">
-            {beat.genre} · {beat.key}
-          </p>
+      {/* Info Container & Dual Buttons (Free + Paid) */}
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-start">
+          <div className="min-w-0">
+            <Link to="/audio-player">
+              <h3 className="text-lg font-bold text-white uppercase tracking-tighter truncate group-hover:text-white/80 transition-colors">
+                {beat.title}
+              </h3>
+            </Link>
+            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] mt-1">
+              {beat.genre} · {beat.key}
+            </p>
+          </div>
         </div>
-        <button 
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('1. BUY BEAT CLICKED');
-            console.log('2. Parent navigation prevented');
-            setIsLicensingOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all"
-        >
-           <ShoppingCart size={14} /> ${beat.licenses.basic.price}
-        </button>
+
+        {/* Actions Bar: Simultaneous Free Download & Paid License Button */}
+        <div className="flex items-center gap-2">
+          {beat.isFree && (
+            <a
+              href={beat.audioUrl || '#'}
+              download={`${beat.title}_Free.mp3`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 px-3 py-2 bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/30 transition-all text-center flex items-center justify-center gap-1.5"
+            >
+              <Download size={12} /> Free MP3
+            </a>
+          )}
+
+          <button 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsLicensingOpen(true);
+            }}
+            className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all text-center flex items-center justify-center gap-1.5"
+          >
+            <ShoppingCart size={12} /> Buy ${beat.licenses?.basic?.price || '29.99'}
+          </button>
+        </div>
       </div>
 
       <LicensingModal 
         beat={beat}
         isOpen={isLicensingOpen}
         onClose={() => setIsLicensingOpen(false)}
+      />
+
+      <BeatShareModal 
+        beat={beat}
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
       />
     </div>
   );

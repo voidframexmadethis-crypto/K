@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Music, ShoppingCart, BarChart3, Video, Settings, Plus, Award, LogOut, ExternalLink, User as UserIcon, ChevronDown, Target, Sparkles, Glasses } from 'lucide-react';
+import { LayoutDashboard, Music, ShoppingCart, BarChart3, Video, Settings, Plus, Award, LogOut, ExternalLink, User as UserIcon, ChevronDown, Target, Sparkles, Glasses, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -12,6 +12,7 @@ function cn(...inputs: ClassValue[]) {
 const menuItems = [
   { name: 'Overview', icon: LayoutDashboard, href: '/dashboard' },
   { name: 'Music Library', icon: Music, href: '/dashboard/music' },
+  { name: 'Remove Beats from Player', icon: VolumeX, href: '/dashboard/remove-beats' },
   { name: 'Sales & Ledger', icon: ShoppingCart, href: '/dashboard/sales' },
   { name: 'Analytics Engine', icon: BarChart3, href: '/dashboard/analytics' },
   { name: 'VR Headset Reviews', icon: Glasses, href: '/dashboard/vr-reviews' },
