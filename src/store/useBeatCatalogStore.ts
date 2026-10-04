@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Beat } from '../types';
+import { INITIAL_DEFAULT_BEATS } from '../data/defaultCatalog';
 
 interface BeatCatalogState {
   beats: Beat[];
@@ -12,7 +13,7 @@ interface BeatCatalogState {
 export const useBeatCatalogStore = create<BeatCatalogState>()(
   persist(
     (set) => ({
-      beats: [], // Empty by default for KRAEZELVbeatz
+      beats: [], // Completely empty store by default
       addBeat: (newBeat) =>
         set((state) => ({
           beats: [newBeat, ...state.beats.filter((b) => b.id !== newBeat.id)],
