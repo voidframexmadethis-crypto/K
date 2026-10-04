@@ -24,6 +24,7 @@ import { MarketingDashboard } from './components/dashboard/MarketingDashboard';
 import { ContentLab } from './components/dashboard/ContentLab';
 import { Achievements } from './components/dashboard/Achievements';
 import { VRReviewsSuite } from './components/vr/VRReviewsSuite';
+import { NotificationSettings } from './components/dashboard/NotificationSettings';
 import { RemoveBeatsFromPlayer } from './components/dashboard/RemoveBeatsFromPlayer';
 import { ProfileSettings } from './components/dashboard/ProfileSettings';
 import { ProducerProfilePage } from './pages/ProducerProfilePage';
@@ -166,6 +167,7 @@ function MainAppContent() {
                 <Route path="/sales" element={<SalesDashboard />} />
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/vr-reviews" element={<VRReviewsSuite />} />
+                <Route path="/notifications" element={<NotificationSettings />} />
                 <Route path="/marketing" element={<MarketingDashboard />} />
                 <Route path="/content" element={<ContentLab />} />
                 <Route path="/achievements" element={<Achievements />} />

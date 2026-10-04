@@ -3,10 +3,31 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import webpush from 'web-push';
+import * as admin from 'firebase-admin';
 import { INITIAL_DEFAULT_BEATS } from './src/data/defaultCatalog.js';
 
-// Load environment variables from .env file if available
+// Load environment variables
 dotenv.config();
+
+// Configure Firebase Admin
+if (!admin.apps.length) {
+  // Assuming credentials are set via env variables in Cloudflare
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+}
+const db = admin.firestore();
+
+// Configure Web Push
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@kraezelvbeatz.com';
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
 
 // Live PayPal API Production Endpoint
 const PAYPAL_API_BASE = 'https://api-m.paypal.com';
@@ -95,6 +116,60 @@ async function startServer() {
       deduplicated: false,
       beat: beatData
     });
+  });
+
+  // Push Notification Subscription Endpoint
+  app.post('/api/notifications/subscribe', async (req: Request, res: Response) => {
+    const { subscription, adminSecret } = req.body;
+    // Basic owner auth check
+    if (adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    await db.collection('owner_push_subscriptions').add({
+      ...subscription,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log('[PUSH_NOTIFICATION] Subscription saved to Firestore.');
+    res.json({ success: true });
+  });
+
+  // Push Notification Config Endpoint
+  app.get('/api/notifications/config', (req: Request, res: Response) => {
+    res.json({ vapidPublicKey: VAPID_PUBLIC_KEY });
+  });
+
+  // Push Notification Trigger Helper
+  const sendPushNotification = async (payload: { title: string; body: string; url: string }) => {
+    const subs = await db.collection('owner_push_subscriptions').get();
+    const notifications = subs.docs.map(doc => {
+      const sub = doc.data() as webpush.PushSubscription;
+      return webpush.sendNotification(sub, JSON.stringify(payload))
+        .catch(err => {
+          if (err.statusCode === 410) {
+            return doc.ref.delete();
+          }
+          console.error('[PUSH_NOTIFICATION] Error sending to subscription:', err);
+        });
+    });
+    await Promise.all(notifications);
+  };
+
+  // Push Notification Trigger Endpoint
+  app.post('/api/notifications/trigger', async (req: Request, res: Response) => {
+    const { title, body, url } = req.body;
+    await sendPushNotification({ title, body, url });
+    res.json({ success: true });
+  });
+
+  // Push Notification Test Endpoint
+  app.post('/api/notifications/test', async (req: Request, res: Response) => {
+    await sendPushNotification({ 
+      title: 'KRAEZELVbeatz Store', 
+      body: 'Test notification successful.',
+      url: '/dashboard/notifications'
+    });
+    res.json({ success: true });
   });
 
   // Server-side proxy route for creating PayPal Order
@@ -197,6 +272,14 @@ async function startServer() {
         const captureData = await captureResponse.json() as any;
         if (captureResponse.ok && (captureData.status === 'COMPLETED' || captureData.status === 'APPROVED')) {
           console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_SUCCESS');
+          
+          // Trigger Sale Notification
+          await sendPushNotification({
+            title: 'KRAEZELVbeatz Store',
+            body: `New Sale: Beat purchased successfully!`,
+            url: '/dashboard/sales'
+          });
+
           return res.json({
             success: true,
             status: 'COMPLETED',

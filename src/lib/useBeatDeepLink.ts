@@ -24,6 +24,15 @@ export function useBeatDeepLink() {
 
       // 2. Update Client-side Meta Tags for OpenGraph & Twitter
       updateHeadMetaTags(matchedBeat);
+
+      // 3. Handle free download link parameter
+      if (params.get('download') === 'free' && matchedBeat.isFree) {
+        // Find a way to trigger FreeDownloadModal. 
+        // Perhaps dispatch an event or use a store to trigger modal opening?
+        // Let's assume there's a store for UI or just dispatch custom event.
+        const event = new CustomEvent('open-free-download-modal', { detail: { beat: matchedBeat } });
+        window.dispatchEvent(event);
+      }
     }
   }, [location.search, beats, setBeat]);
 }

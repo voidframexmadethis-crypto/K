@@ -1297,6 +1297,20 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   + Create Another Beat
                 </button>
               )}
+              
+              {editingBeat && editingBeat.isFree && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const downloadUrl = `${window.location.origin}/?beat=${editingBeat.id}&download=free`;
+                    navigator.clipboard.writeText(downloadUrl);
+                    alert('Free Download Link Copied: ' + downloadUrl);
+                  }}
+                  className="w-full sm:w-auto px-8 py-6 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-xs transition-all border border-emerald-500/20 shrink-0 cursor-pointer rounded-sm"
+                >
+                  Generate Free Download Link
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -30,6 +30,18 @@ export const PersistentPlayer = () => {
   const [showDspMenu, setShowDspMenu] = useState(false);
 
   useEffect(() => {
+    const handleOpenFreeDownload = (event: any) => {
+      if (event.detail.beat.id === currentBeat?.id) {
+        setIsFreeModalOpen(true);
+      }
+    };
+    window.addEventListener('open-free-download-modal', handleOpenFreeDownload);
+    return () => {
+      window.removeEventListener('open-free-download-modal', handleOpenFreeDownload);
+    };
+  }, [currentBeat]);
+
+  useEffect(() => {
     if (audioRef.current) {
       // Initialize 32-bit DSP Engine
       hiFiAudioEngine.initialize(audioRef.current);

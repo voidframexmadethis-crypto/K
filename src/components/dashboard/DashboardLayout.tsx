@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Music, ShoppingCart, BarChart3, Video, Settings, Plus, Award, LogOut, ExternalLink, User as UserIcon, ChevronDown, Target, Sparkles, Glasses, VolumeX } from 'lucide-react';
+import { LayoutDashboard, Music, ShoppingCart, BarChart3, Video, Settings, Plus, Award, LogOut, ExternalLink, User as UserIcon, ChevronDown, Target, Sparkles, Glasses, VolumeX, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -16,6 +16,7 @@ const menuItems = [
   { name: 'Sales & Ledger', icon: ShoppingCart, href: '/dashboard/sales' },
   { name: 'Analytics Engine', icon: BarChart3, href: '/dashboard/analytics' },
   { name: 'VR Headset Reviews', icon: Glasses, href: '/dashboard/vr-reviews' },
+  { name: 'Notifications', icon: Bell, href: '/dashboard/notifications' },
   { name: 'Marketing', icon: Target, href: '/dashboard/marketing' },
   { name: 'Content Lab', icon: Video, href: '/dashboard/content' },
   { name: 'Achievements', icon: Award, href: '/dashboard/achievements' },
