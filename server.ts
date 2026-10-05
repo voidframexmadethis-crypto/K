@@ -182,14 +182,16 @@ async function startServer() {
   // Security Headers: Content-Security-Policy & Cross-Origin-Opener-Policy for PayPal Web SDK
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader(
       'Content-Security-Policy',
       [
-        "default-src 'self' https: data: blob:",
+        "default-src 'self' https: http: data: blob:",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com",
-        "connect-src 'self' https: wss: https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com https://*.archive.org",
+        "connect-src 'self' https: http: wss: ws: https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com https://archive.org https://*.archive.org",
+        "media-src 'self' https: http: data: blob: https://archive.org https://*.archive.org",
         "frame-src 'self' https: https://www.paypal.com https://*.paypal.com",
-        "img-src 'self' data: blob: https: https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com",
+        "img-src 'self' data: blob: https: http: https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com https://archive.org https://*.archive.org",
         "style-src 'self' 'unsafe-inline' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com https://fonts.googleapis.com",
         "font-src 'self' data: https: https://fonts.gstatic.com"
       ].join('; ')
@@ -236,6 +238,8 @@ async function startServer() {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize,
         'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin'
       });
       file.pipe(res);
     } else {
@@ -243,7 +247,9 @@ async function startServer() {
         'Content-Length': fileSize,
         'Content-Type': contentType,
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=31536000, immutable'
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin'
       });
       fs.createReadStream(filePath).pipe(res);
     }
@@ -325,6 +331,7 @@ async function startServer() {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Range');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       res.setHeader('Content-Type', contentType);
       
       if (contentLength) res.setHeader('Content-Length', contentLength);

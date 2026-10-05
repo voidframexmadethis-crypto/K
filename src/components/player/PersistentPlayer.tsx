@@ -45,6 +45,48 @@ export const PersistentPlayer = () => {
   const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('streaming');
   const [showDspMenu, setShowDspMenu] = useState(false);
 
+  // Runtime Audio Diagnostic Reporter conforming strictly to Step 8
+  const logAudioDiagnostic = (label: string, extra?: { requestStatus?: string; cspBlocked?: boolean; error?: any }) => {
+    const audio = audioRef.current;
+    console.log('[ AUDIO_DIAGNOSTIC ]', {
+      event: label,
+      src: audio?.src || '',
+      currentSrc: audio?.currentSrc || '',
+      readyState: audio?.readyState ?? 0,
+      networkState: audio?.networkState ?? 0,
+      paused: audio?.paused ?? true,
+      muted: audio?.muted ?? false,
+      volume: audio?.volume ?? 1,
+      error: audio?.error ? { code: audio.error.code, message: audio.error.message } : (extra?.error || null),
+      requestStatus: extra?.requestStatus || (audio?.readyState && audio.readyState >= 2 ? 'OK' : (audio?.src ? 'LOADING' : 'IDLE')),
+      cspBlocked: extra?.cspBlocked ?? false
+    });
+  };
+
+  // Monitor CSP security policy violations on media/connect requests
+  useEffect(() => {
+    const handleCspViolation = (e: SecurityPolicyViolationEvent) => {
+      const uri = e.blockedURI || '';
+      if (
+        e.effectiveDirective === 'media-src' ||
+        e.effectiveDirective === 'connect-src' ||
+        uri.includes('.mp3') ||
+        uri.includes('.m4a') ||
+        uri.includes('archive.org') ||
+        uri.includes('/api/audio/proxy')
+      ) {
+        console.error('[ AUDIO_DIAGNOSTIC ] CSP_BLOCKED_MEDIA:', {
+          blockedURI: uri,
+          directive: e.effectiveDirective,
+          policy: e.originalPolicy
+        });
+        logAudioDiagnostic('CSP_VIOLATION', { cspBlocked: true });
+      }
+    };
+    window.addEventListener('securitypolicyviolation', handleCspViolation);
+    return () => window.removeEventListener('securitypolicyviolation', handleCspViolation);
+  }, []);
+
   useEffect(() => {
     const handleOpenFreeDownload = (event: any) => {
       if (event.detail.beat.id === currentBeat?.id) {
@@ -278,8 +320,18 @@ export const PersistentPlayer = () => {
         <audio
           ref={audioRef}
           onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onError={handleAudioError}
+          onLoadedMetadata={() => {
+            handleLoadedMetadata();
+            logAudioDiagnostic('LOADED_METADATA');
+          }}
+          onCanPlay={() => logAudioDiagnostic('CAN_PLAY')}
+          onPlay={() => logAudioDiagnostic('PLAY')}
+          onPlaying={() => logAudioDiagnostic('PLAYING')}
+          onPause={() => logAudioDiagnostic('PAUSE')}
+          onError={(e) => {
+            handleAudioError(e);
+            logAudioDiagnostic('AUDIO_ERROR', { error: audioRef.current?.error });
+          }}
           onEnded={next}
         />
         

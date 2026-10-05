@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { loadScript } from '@paypal/paypal-js';
 
+declare global {
+  interface Window {
+    paypalSdkInstance?: any;
+  }
+}
+
 interface PayPalButtonProps {
   amount: number;
   currency?: string;
@@ -19,6 +25,25 @@ interface PayPalConfig {
 let cachedConfigPromise: Promise<PayPalConfig> | null = null;
 let cachedConfig: PayPalConfig | null = null;
 let cachedSdkPromise: Promise<any> | null = null;
+let isInitializing = false;
+let isInitialized = false;
+let lastInitError: string | null = null;
+
+// Diagnostics helper conforming strictly to Step 9
+export function logPayPalSdkDiagnostic(error?: any) {
+  if (typeof window === 'undefined') return;
+  const scriptEl = document.querySelector('script[src*="paypal.com"]');
+  const win = window as any;
+  console.log('[PAYPAL_SDK]', {
+    scriptLoaded: Boolean(scriptEl),
+    sdkAvailable: Boolean(win.paypal),
+    createInstanceAvailable: typeof win.paypal?.createInstance === 'function',
+    initializing: isInitializing,
+    initialized: isInitialized,
+    instanceAvailable: Boolean(win.paypalSdkInstance),
+    error: error ? (error?.message || String(error)) : (lastInitError || null)
+  });
+}
 
 export function fetchPayPalConfig(): Promise<PayPalConfig> {
   if (cachedConfig && cachedConfig.clientId && cachedConfig.clientId !== 'sb') return Promise.resolve(cachedConfig);
@@ -50,12 +75,31 @@ export function fetchPayPalConfig(): Promise<PayPalConfig> {
 export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
   if (typeof window === 'undefined') return Promise.resolve(null);
   const win = window as any;
+
+  // Step 4: Immediately return existing shared instance if available
+  if (win.paypalSdkInstance && win.paypalSdkInstance.Buttons) {
+    isInitialized = true;
+    isInitializing = false;
+    logPayPalSdkDiagnostic();
+    return Promise.resolve(win.paypalSdkInstance);
+  }
+
   if (win.paypal && win.paypal.Buttons) {
+    win.paypalSdkInstance = win.paypal;
+    isInitialized = true;
+    isInitializing = false;
+    win.dispatchEvent(new CustomEvent('paypalReady', { detail: { instance: win.paypal } }));
+    logPayPalSdkDiagnostic();
     return Promise.resolve(win.paypal);
   }
+
   if (cachedSdkPromise) {
     return cachedSdkPromise;
   }
+
+  isInitializing = true;
+  lastInitError = null;
+  logPayPalSdkDiagnostic();
 
   cachedSdkPromise = fetchPayPalConfig()
     .then(config => {
@@ -64,7 +108,11 @@ export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
         throw new Error('PayPal Client ID is required for checkout.');
       }
 
+      if (win.paypalSdkInstance && win.paypalSdkInstance.Buttons) {
+        return win.paypalSdkInstance;
+      }
       if (win.paypal && win.paypal.Buttons) {
+        win.paypalSdkInstance = win.paypal;
         return win.paypal;
       }
 
@@ -81,16 +129,26 @@ export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
     })
     .then(paypal => {
       if (paypal && paypal.Buttons) {
-        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED_SUCCESSFULLY');
+        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED_SUCCESSFULLY (PayPal JS SDK v5)');
+        win.paypalSdkInstance = paypal;
+        isInitialized = true;
+        isInitializing = false;
+        win.dispatchEvent(new CustomEvent('paypalReady', { detail: { instance: paypal } }));
+        logPayPalSdkDiagnostic();
         return paypal;
       }
-      throw new Error('PayPal SDK loaded but Buttons component was not found.');
+      throw new Error('PayPal SDK loaded but Buttons component was not found in namespace.');
     })
     .catch(err => {
       cachedSdkPromise = null;
+      isInitializing = false;
+      isInitialized = false;
+      const rawErrorStr = err?.message || String(err);
+      lastInitError = rawErrorStr;
+      logPayPalSdkDiagnostic(err);
+
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const rawErrorStr = err?.message || String(err);
       const isCspFailure = 
         rawErrorStr.toLowerCase().includes('content security policy') ||
         rawErrorStr.toLowerCase().includes('csp') ||
@@ -116,19 +174,6 @@ export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
   return cachedSdkPromise;
 }
 
-// Background pre-warming on idle/startup without blocking execution
-if (typeof window !== 'undefined') {
-  if ('requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(() => {
-      preloadPayPalSdk().catch(() => {});
-    });
-  } else {
-    setTimeout(() => {
-      preloadPayPalSdk().catch(() => {});
-    }, 500);
-  }
-}
-
 export const PayPalPayment: React.FC<PayPalButtonProps> = ({
   amount,
   currency = 'USD',
@@ -142,7 +187,6 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
   const [retryKey, setRetryKey] = useState(0);
 
   const buttonContainerRef = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep references to amount and description so createOrder & onApprove ALWAYS use the latest values
   // without needing to destroy and recreate the PayPal button iframe every time license tier changes!
@@ -162,179 +206,193 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
     currencyRef.current = currency;
   }, [currency]);
 
-  // Handle PayPal SDK Loading and Button Rendering
+  // Handle PayPal SDK Loading and Button Rendering (Consistent PayPal JS SDK v5)
   useEffect(() => {
     let isCancelled = false;
     setLoadError(null);
     setIsLoaded(false);
 
-    // Safety timeout
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      if (!isLoaded && !isCancelled) {
-        console.warn('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: PayPal SDK loading timed out after 12s');
-        setLoadError('PayPal secure gateway failed to initialize in time.');
+    const renderButtonsWithInstance = (paypal: any) => {
+      if (isCancelled || !buttonContainerRef.current) return;
+
+      if (cachedConfig?.merchantEmail) {
+        setMerchantEmail(cachedConfig.merchantEmail);
       }
-    }, 12000);
 
-    preloadPayPalSdk(currency)
-      .then(paypal => {
-        if (isCancelled || !buttonContainerRef.current) return;
+      const buttonsAvailable = !!(paypal && paypal.Buttons);
+      console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTONS_AVAILABLE=${buttonsAvailable}`);
 
-        if (cachedConfig?.merchantEmail) {
-          setMerchantEmail(cachedConfig.merchantEmail);
-        }
+      if (!buttonsAvailable) {
+        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons is undefined');
+        setLoadError('PayPal SDK loaded but Buttons component is unavailable.');
+        return;
+      }
 
-        const buttonsAvailable = !!(paypal && paypal.Buttons);
-        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTONS_AVAILABLE=${buttonsAvailable}`);
+      buttonContainerRef.current.innerHTML = '';
 
-        if (!buttonsAvailable) {
-          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons is undefined');
-          setLoadError('PayPal SDK loaded but Buttons component is unavailable.');
+      try {
+        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTON_INITIALIZED');
+        const buttons = paypal.Buttons({
+          style: {
+            layout: 'vertical',
+            color: 'gold',
+            shape: 'rect',
+            label: 'pay'
+          },
+          createOrder: async (data: any, actions: any) => {
+            console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_STARTED');
+            try {
+              const res = await fetch('/api/paypal/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  amount: amountRef.current, 
+                  currency: currencyRef.current, 
+                  description: descriptionRef.current 
+                })
+              });
+
+              const orderRes = await res.json();
+              
+              if (!res.ok || orderRes.success === false) {
+                const errName = orderRes.error || 'CREATE_ORDER_FAILED';
+                const errMsg = orderRes.message || `Server returned HTTP ${res.status}`;
+                console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED: HTTP ${res.status} - ${errName}: ${errMsg}`);
+                setLoadError(`Order creation error (${errName}): ${errMsg}`);
+                throw new Error(`Order Creation Error: ${errMsg}`);
+              }
+
+              if (orderRes.id) {
+                console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Server Order ID: ${orderRes.id})`);
+                return orderRes.id;
+              }
+
+              // Single-Party SDK Creation Fallback (no unprocessable client payee override)
+              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Single-Party Client Order)');
+              return actions.order.create({
+                purchase_units: [{
+                  description: descriptionRef.current,
+                  amount: {
+                    currency_code: currencyRef.current,
+                    value: amountRef.current.toFixed(2).toString(),
+                  }
+                }]
+              });
+            } catch (err: any) {
+              console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED:', err?.message || err);
+              throw err;
+            }
+          },
+          onApprove: async (data: any, actions: any) => {
+            console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_APPROVAL_STARTED');
+            console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_STARTED');
+
+            try {
+              let captureData = null;
+              if (actions && actions.order) {
+                captureData = await actions.order.capture();
+              }
+
+              const orderID = data?.orderID || captureData?.id;
+
+              const captureRes = await fetch('/api/paypal/capture-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  orderID, 
+                  amount: amountRef.current, 
+                  currency: currencyRef.current, 
+                  description: descriptionRef.current 
+                })
+              });
+
+              const verifiedResult = await captureRes.json();
+
+              if (!captureRes.ok || verifiedResult.success === false) {
+                const errName = verifiedResult.error || 'CAPTURE_FAILED';
+                const errMsg = verifiedResult.message || `Server returned HTTP ${captureRes.status}`;
+                console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: HTTP ${captureRes.status} - ${errName}: ${errMsg}`);
+                onError(new Error(`Capture Verification Error: ${errMsg}`));
+                return;
+              }
+
+              if (verifiedResult.success && (verifiedResult.status === 'COMPLETED' || captureData?.status === 'COMPLETED')) {
+                console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_SUCCESS');
+                onSuccess(captureData || verifiedResult);
+              } else {
+                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: Status incomplete');
+                onError(new Error('PayPal capture status incomplete.'));
+              }
+            } catch (err: any) {
+              console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED:', err?.message || err);
+              onError(err);
+            }
+          },
+          onCancel: (data: any) => {
+            console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CHECKOUT_CANCELLED');
+          },
+          onError: (err: any) => {
+            console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CHECKOUT_ERROR:', err?.message || err);
+            onError(err);
+          }
+        });
+
+        const isEligible = typeof buttons.isEligible === 'function' ? buttons.isEligible() : true;
+        console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTONS_ELIGIBLE=${isEligible}`);
+
+        if (!isEligible) {
+          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons().isEligible() returned false');
+          setLoadError('PayPal buttons are not eligible for this account/currency.');
           return;
         }
 
-        buttonContainerRef.current.innerHTML = '';
-
-        try {
-          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTON_INITIALIZED');
-          const buttons = paypal.Buttons({
-            style: {
-              layout: 'vertical',
-              color: 'gold',
-              shape: 'rect',
-              label: 'pay'
-            },
-            createOrder: async (data: any, actions: any) => {
-              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_STARTED');
-              try {
-                const res = await fetch('/api/paypal/create-order', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    amount: amountRef.current, 
-                    currency: currencyRef.current, 
-                    description: descriptionRef.current 
-                  })
-                });
-
-                const orderRes = await res.json();
-                
-                if (!res.ok || orderRes.success === false) {
-                  const errName = orderRes.error || 'CREATE_ORDER_FAILED';
-                  const errMsg = orderRes.message || `Server returned HTTP ${res.status}`;
-                  console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED: HTTP ${res.status} - ${errName}: ${errMsg}`);
-                  setLoadError(`Order creation error (${errName}): ${errMsg}`);
-                  throw new Error(`Order Creation Error: ${errMsg}`);
-                }
-
-                if (orderRes.id) {
-                  console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Server Order ID: ${orderRes.id})`);
-                  return orderRes.id;
-                }
-
-                // Single-Party SDK Creation Fallback (no unprocessable client payee override)
-                console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Single-Party Client Order)');
-                return actions.order.create({
-                  purchase_units: [{
-                    description: descriptionRef.current,
-                    amount: {
-                      currency_code: currencyRef.current,
-                      value: amountRef.current.toFixed(2).toString(),
-                    }
-                  }]
-                });
-              } catch (err: any) {
-                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED:', err?.message || err);
-                throw err;
-              }
-            },
-            onApprove: async (data: any, actions: any) => {
-              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_APPROVAL_STARTED');
-              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_STARTED');
-
-              try {
-                let captureData = null;
-                if (actions && actions.order) {
-                  captureData = await actions.order.capture();
-                }
-
-                const orderID = data?.orderID || captureData?.id;
-
-                const captureRes = await fetch('/api/paypal/capture-order', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    orderID, 
-                    amount: amountRef.current, 
-                    currency: currencyRef.current, 
-                    description: descriptionRef.current 
-                  })
-                });
-
-                const verifiedResult = await captureRes.json();
-
-                if (!captureRes.ok || verifiedResult.success === false) {
-                  const errName = verifiedResult.error || 'CAPTURE_FAILED';
-                  const errMsg = verifiedResult.message || `Server returned HTTP ${captureRes.status}`;
-                  console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: HTTP ${captureRes.status} - ${errName}: ${errMsg}`);
-                  onError(new Error(`Capture Verification Error: ${errMsg}`));
-                  return;
-                }
-
-                if (verifiedResult.success && (verifiedResult.status === 'COMPLETED' || captureData?.status === 'COMPLETED')) {
-                  console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_SUCCESS');
-                  onSuccess(captureData || verifiedResult);
-                } else {
-                  console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED: Status incomplete');
-                  onError(new Error('PayPal capture status incomplete.'));
-                }
-              } catch (err: any) {
-                console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CAPTURE_FAILED:', err?.message || err);
-                onError(err);
-              }
-            },
-            onCancel: (data: any) => {
-              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_CHECKOUT_CANCELLED');
-            },
-            onError: (err: any) => {
-              console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_CHECKOUT_ERROR:', err?.message || err);
-              onError(err);
-            }
+        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_STARTED');
+        buttons.render(buttonContainerRef.current)
+          .then(() => {
+            if (isCancelled) return;
+            console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_SUCCESS');
+            setIsLoaded(true);
+          })
+          .catch((err: any) => {
+            if (isCancelled) return;
+            console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_ERROR=${err?.message || err}`);
+            console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED');
+            setLoadError('Failed to render secure PayPal checkout interface.');
           });
+      } catch (err: any) {
+        if (isCancelled) return;
+        console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_ERROR=${err?.message || err}`);
+        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED');
+        setLoadError('Failed to initialize PayPal checkout button.');
+      }
+    };
 
-          const isEligible = typeof buttons.isEligible === 'function' ? buttons.isEligible() : true;
-          console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_BUTTONS_ELIGIBLE=${isEligible}`);
-
-          if (!isEligible) {
-            console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons().isEligible() returned false');
-            setLoadError('PayPal buttons are not eligible for this account/currency.');
-            return;
-          }
-
-          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_STARTED');
-          buttons.render(buttonContainerRef.current)
-            .then(() => {
-              if (isCancelled) return;
-              console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_SUCCESS');
-              setIsLoaded(true);
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-              }
-            })
-            .catch((err: any) => {
-              if (isCancelled) return;
-              console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_ERROR=${err?.message || err}`);
-              console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED');
-              setLoadError('Failed to render secure PayPal checkout interface.');
-            });
-        } catch (err: any) {
-          if (isCancelled) return;
-          console.error(`[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_ERROR=${err?.message || err}`);
-          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED');
-          setLoadError('Failed to initialize PayPal checkout button.');
+    // Step 4 compliance: Immediately use existing instance if available
+    const win = window as any;
+    if (win.paypalSdkInstance && win.paypalSdkInstance.Buttons) {
+      renderButtonsWithInstance(win.paypalSdkInstance);
+      return () => {
+        isCancelled = true;
+        if (buttonContainerRef.current) {
+          buttonContainerRef.current.innerHTML = '';
         }
+      };
+    }
+
+    // Otherwise, wait for the paypalReady event OR the singleton preload promise
+    const onPaypalReady = (e: any) => {
+      const inst = e.detail?.instance || win.paypalSdkInstance;
+      if (inst && inst.Buttons && !isCancelled) {
+        renderButtonsWithInstance(inst);
+      }
+    };
+
+    window.addEventListener('paypalReady', onPaypalReady, { once: true });
+
+    preloadPayPalSdk(currency)
+      .then(paypal => {
+        if (isCancelled) return;
+        renderButtonsWithInstance(paypal);
       })
       .catch(err => {
         if (isCancelled) return;
@@ -348,10 +406,7 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
 
     return () => {
       isCancelled = true;
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+      window.removeEventListener('paypalReady', onPaypalReady);
       if (buttonContainerRef.current) {
         buttonContainerRef.current.innerHTML = '';
       }
@@ -402,6 +457,9 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
     cachedSdkPromise = null;
     cachedConfigPromise = null;
     cachedConfig = null;
+    (window as any).paypalSdkInstance = null;
+    isInitialized = false;
+    isInitializing = false;
     setRetryKey(prev => prev + 1);
   };
 
@@ -446,7 +504,8 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
           {!isLoaded && (
             <div className="flex flex-col items-center justify-center space-y-3 py-6">
               <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-amber-400 font-mono tracking-widest uppercase animate-pulse">Initializing Live PayPal Checkout ({merchantEmail})...</p>
+              <p className="text-xs text-amber-400 font-mono tracking-widest uppercase animate-pulse">PayPal is still initializing...</p>
+              <p className="text-[10px] text-neutral-400 font-mono">Connecting to secure network ({merchantEmail})</p>
             </div>
           )}
           {/* Use opacity and min-height so PayPal SDK can calculate element layout without display:none bugs */}
@@ -466,4 +525,5 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
 };
 
 export default PayPalPayment;
+
 
