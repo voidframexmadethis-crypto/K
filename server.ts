@@ -64,25 +64,92 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 
 
-// Live PayPal API Production Endpoint
-const PAYPAL_API_BASE = 'https://api-m.paypal.com';
+// Live & Sandbox PayPal API Production Endpoints
+const PAYPAL_LIVE_API_BASE = 'https://api-m.paypal.com';
+const PAYPAL_SANDBOX_API_BASE = 'https://api-m.sandbox.paypal.com';
 
-// Authoritative Production PayPal Credentials (Server-Side Only)
-const BACKEND_PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '';
-const BACKEND_PAYPAL_SECRET = process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET || '';
-const BACKEND_PAYPAL_EMAIL = process.env.PAYPAL_MERCHANT_EMAIL || 'kraezelvbeatz@gmail.com';
+interface PayPalRuntimeConfig {
+  clientId: string;
+  clientSecret: string;
+  merchantEmail: string;
+  mode: 'LIVE' | 'SANDBOX';
+  isConfigured: boolean;
+}
+
+// Authoritative Runtime PayPal Credentials Resolver
+function resolvePayPalCredentials(): PayPalRuntimeConfig {
+  let fileConfig: Partial<PayPalRuntimeConfig> = {};
+  const storagePath = path.resolve(process.cwd(), 'storage', 'paypal-credentials.json');
+  if (fs.existsSync(storagePath)) {
+    try {
+      fileConfig = JSON.parse(fs.readFileSync(storagePath, 'utf-8'));
+    } catch (e) {
+      console.warn('[PAYPAL_RUNTIME] Warning reading storage/paypal-credentials.json:', e);
+    }
+  }
+
+  const clientId = (
+    process.env.PAYPAL_CLIENT_ID ||
+    process.env.VITE_PAYPAL_CLIENT_ID ||
+    process.env.PAYPAL_CLIENTID ||
+    process.env.PAYPAL_KEY ||
+    fileConfig.clientId ||
+    ''
+  ).trim();
+
+  const clientSecret = (
+    process.env.PAYPAL_CLIENT_SECRET ||
+    process.env.PAYPAL_SECRET ||
+    process.env.PAYPAL_CLIENTSECRET ||
+    fileConfig.clientSecret ||
+    ''
+  ).trim();
+
+  const merchantEmail = (
+    process.env.PAYPAL_MERCHANT_EMAIL ||
+    process.env.PAYPAL_EMAIL ||
+    fileConfig.merchantEmail ||
+    'kraezelvbeatz@gmail.com'
+  ).trim();
+
+  const rawMode = (
+    process.env.PAYPAL_MODE ||
+    process.env.PAYPAL_ENV ||
+    fileConfig.mode ||
+    (clientId && !clientId.startsWith('sb') && clientSecret ? 'LIVE' : 'SANDBOX')
+  ).toString().toUpperCase();
+
+  const mode: 'LIVE' | 'SANDBOX' = rawMode === 'LIVE' ? 'LIVE' : 'SANDBOX';
+  const isConfigured = Boolean(clientId && clientId !== 'sb');
+
+  return {
+    clientId,
+    clientSecret,
+    merchantEmail,
+    mode,
+    isConfigured
+  };
+}
+
+function getPayPalEmail(): string {
+  return resolvePayPalCredentials().merchantEmail;
+}
 
 // Server-side helper to acquire PayPal REST Access Token safely without logging secrets
-async function getPayPalAccessToken(clientId: string, secret: string): Promise<string | null> {
-  if (!secret) {
-    console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_SKIPPED (No Secret in Runtime)');
+async function getPayPalAccessToken(): Promise<string | null> {
+  const config = resolvePayPalCredentials();
+
+  if (!config.clientSecret || !config.clientId) {
+    console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_SKIPPED (No Client ID or Secret in Runtime)');
     return null;
   }
 
-  console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_REQUEST_STARTED');
+  const apiBase = config.mode === 'LIVE' ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE;
+
+  console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_OAUTH_TOKEN_REQUEST_STARTED (Mode: ${config.mode})`);
   try {
-    const auth = Buffer.from(`${clientId.trim()}:${secret.trim()}`).toString('base64');
-    const response = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
+    const auth = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
+    const response = await fetch(`${apiBase}/v1/oauth2/token`, {
       method: 'POST',
       body: 'grant_type=client_credentials',
       headers: {
@@ -111,6 +178,24 @@ async function getPayPalAccessToken(clientId: string, secret: string): Promise<s
 async function startServer() {
   const app = reportExpressErrors(express());
   app.use(express.json({ limit: '10mb' }));
+
+  // Security Headers: Content-Security-Policy & Cross-Origin-Opener-Policy for PayPal Web SDK
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader(
+      'Content-Security-Policy',
+      [
+        "default-src 'self' https: data: blob:",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com",
+        "connect-src 'self' https: wss: https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com https://*.archive.org",
+        "frame-src 'self' https: https://www.paypal.com https://*.paypal.com",
+        "img-src 'self' data: blob: https: https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com",
+        "style-src 'self' 'unsafe-inline' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com https://fonts.googleapis.com",
+        "font-src 'self' data: https: https://fonts.gstatic.com"
+      ].join('; ')
+    );
+    next();
+  });
 
   // Persistent Media Storage Directory Initialization
   const storageDir = path.resolve(process.cwd(), 'storage', 'beats');
@@ -194,16 +279,164 @@ async function startServer() {
     });
   });
 
+  // Server-side Audio Proxy Route for Cross-Origin & Range Request Support
+  app.get('/api/audio/proxy', async (req: Request, res: Response) => {
+    const rawTargetUrl = req.query.url as string;
+    if (!rawTargetUrl) {
+      return res.status(400).send('Missing url parameter');
+    }
+
+    let targetUrl = rawTargetUrl.trim();
+    if (targetUrl.includes('archive.org/details/')) {
+      targetUrl = targetUrl.replace('archive.org/details/', 'archive.org/download/');
+    }
+
+    try {
+      const requestHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      };
+      if (req.headers.range) {
+        requestHeaders['Range'] = req.headers.range;
+      }
+
+      const fetchRes = await fetch(targetUrl, {
+        headers: requestHeaders,
+        redirect: 'follow',
+      });
+
+      if (!fetchRes.ok && fetchRes.status !== 206) {
+        console.warn(`[AUDIO_PROXY] Remote fetch status: ${fetchRes.status} for ${targetUrl}`);
+        return res.status(fetchRes.status).send(`Failed to fetch audio: ${fetchRes.statusText}`);
+      }
+
+      const lowerUrl = targetUrl.toLowerCase();
+      let contentType = fetchRes.headers.get('content-type') || 'audio/mpeg';
+      if (contentType.includes('text/html') || contentType.includes('application/octet-stream')) {
+        if (lowerUrl.endsWith('.m4a') || lowerUrl.includes('.m4a?')) {
+          contentType = 'audio/mp4';
+        } else {
+          contentType = 'audio/mpeg';
+        }
+      }
+
+      const contentLength = fetchRes.headers.get('content-length');
+      const contentRange = fetchRes.headers.get('content-range');
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Range');
+      res.setHeader('Content-Type', contentType);
+      
+      if (contentLength) res.setHeader('Content-Length', contentLength);
+      if (contentRange) res.setHeader('Content-Range', contentRange);
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      res.status(fetchRes.status);
+
+      if (fetchRes.body) {
+        const reader = fetchRes.body.getReader();
+        const pump = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        };
+        await pump();
+      } else {
+        res.end();
+      }
+    } catch (err: any) {
+      console.error('[AUDIO_PROXY_ERROR]', err?.message || err);
+      if (!res.headersSent) {
+        res.status(500).send('Audio proxy error');
+      }
+    }
+  });
+
   // API endpoint to serve public PayPal config securely from backend
   app.get('/api/config/paypal', (req: Request, res: Response) => {
-    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const config = resolvePayPalCredentials();
+
+    if (!config.isConfigured) {
+      return res.json({ 
+        configured: false,
+        clientId: '',
+        merchantEmail: config.merchantEmail,
+        currency: 'USD',
+        env: 'UNCONFIGURED',
+        hasServerSecret: Boolean(config.clientSecret),
+        message: 'PayPal credentials not configured on server.'
+      });
+    }
+
     res.json({ 
-      clientId: BACKEND_PAYPAL_CLIENT_ID,
-      merchantEmail: BACKEND_PAYPAL_EMAIL,
+      configured: true,
+      clientId: config.clientId,
+      merchantEmail: config.merchantEmail,
       currency: 'USD',
-      env: 'LIVE',
-      hasServerSecret: !!BACKEND_PAYPAL_SECRET
+      env: config.mode,
+      hasServerSecret: Boolean(config.clientSecret)
     });
+  });
+
+  // Secure Server-side Route to Configure/Update PayPal Credentials
+  app.post('/api/config/paypal', (req: Request, res: Response) => {
+    const { clientId, clientSecret, merchantEmail, mode } = req.body;
+
+    if (!clientId) {
+      return res.status(400).json({ success: false, error: 'MISSING_CLIENT_ID', message: 'PayPal Client ID is required.' });
+    }
+
+    const newConfig = {
+      clientId: clientId.trim(),
+      clientSecret: (clientSecret || '').trim(),
+      merchantEmail: (merchantEmail || 'kraezelvbeatz@gmail.com').trim(),
+      mode: mode === 'SANDBOX' ? 'SANDBOX' : 'LIVE',
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const storageDir = path.resolve(process.cwd(), 'storage');
+      fs.mkdirSync(storageDir, { recursive: true });
+      const storagePath = path.join(storageDir, 'paypal-credentials.json');
+      fs.writeFileSync(storagePath, JSON.stringify(newConfig, null, 2));
+
+      // Update process.env in memory immediately
+      process.env.PAYPAL_CLIENT_ID = newConfig.clientId;
+      process.env.VITE_PAYPAL_CLIENT_ID = newConfig.clientId;
+      process.env.PAYPAL_CLIENT_SECRET = newConfig.clientSecret;
+      process.env.PAYPAL_SECRET = newConfig.clientSecret;
+      process.env.PAYPAL_MERCHANT_EMAIL = newConfig.merchantEmail;
+      process.env.PAYPAL_MODE = newConfig.mode;
+
+      // Sync .env file
+      const envPath = path.resolve(process.cwd(), '.env');
+      const envContent = [
+        `PAYPAL_CLIENT_ID=${newConfig.clientId}`,
+        `VITE_PAYPAL_CLIENT_ID=${newConfig.clientId}`,
+        `PAYPAL_CLIENT_SECRET=${newConfig.clientSecret}`,
+        `PAYPAL_MERCHANT_EMAIL=${newConfig.merchantEmail}`,
+        `PAYPAL_MODE=${newConfig.mode}`
+      ].join('\n');
+      fs.writeFileSync(envPath, envContent);
+
+      console.log(`[PAYPAL_RUNTIME] Configured PayPal [Mode: ${newConfig.mode}, ClientID: ${newConfig.clientId.slice(0, 8)}...]`);
+
+      res.json({
+        success: true,
+        configured: true,
+        clientId: newConfig.clientId,
+        merchantEmail: newConfig.merchantEmail,
+        env: newConfig.mode,
+        hasServerSecret: Boolean(newConfig.clientSecret)
+      });
+    } catch (err: any) {
+      console.error('[PAYPAL_RUNTIME_ERROR] Failed to save credentials:', err);
+      res.status(500).json({ success: false, error: err?.message || 'Failed to save PayPal credentials' });
+    }
   });
 
   // Server-side Idempotent Beat Creation Endpoint & In-Memory Store Fallback
@@ -362,12 +595,24 @@ async function startServer() {
     const validatedCurrency = currency || 'USD';
     const validatedDescription = description || 'Digital Beat License Purchase';
 
+    const config = resolvePayPalCredentials();
+    if (!config.isConfigured) {
+      console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_FAILED: Server PayPal credentials not configured.');
+      return res.status(400).json({
+        success: false,
+        error: 'PAYPAL_NOT_CONFIGURED',
+        message: 'PayPal Client ID is not configured on the server.'
+      });
+    }
+
+    const apiBase = config.mode === 'LIVE' ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE;
+
     try {
-      const accessToken = await getPayPalAccessToken(BACKEND_PAYPAL_CLIENT_ID, BACKEND_PAYPAL_SECRET);
+      const accessToken = await getPayPalAccessToken();
 
       if (accessToken) {
         // Direct Server-to-Server Live Order Creation on PayPal Production API
-        const orderResponse = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+        const orderResponse = await fetch(`${apiBase}/v2/checkout/orders`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -387,12 +632,12 @@ async function startServer() {
 
         const orderData = await orderResponse.json() as any;
         if (orderResponse.ok && orderData.id) {
-          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS');
+          console.log(`[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Mode: ${config.mode})`);
           return res.json({
             success: true,
             id: orderData.id,
             status: orderData.status,
-            mode: 'LIVE'
+            mode: config.mode
           });
         } else {
           const errName = orderData.name || 'UNPROCESSABLE_ENTITY';
@@ -407,12 +652,12 @@ async function startServer() {
         }
       }
 
-      // If secret is not set in runtime, return server-authoritative payload for client SDK creation
-      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (SDK Fallback)');
+      // If client secret is not set, return server-authoritative payload for client SDK creation
+      console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_ORDER_CREATE_SUCCESS (Client SDK Mode)');
       res.json({
         success: true,
-        clientId: BACKEND_PAYPAL_CLIENT_ID,
-        merchantEmail: BACKEND_PAYPAL_EMAIL,
+        clientId: config.clientId,
+        merchantEmail: config.merchantEmail,
         amount: validatedAmount,
         currency: validatedCurrency,
         description: validatedDescription
@@ -437,12 +682,15 @@ async function startServer() {
       return res.status(400).json({ success: false, error: 'MISSING_ORDER_ID', message: 'Missing PayPal orderID' });
     }
 
+    const config = resolvePayPalCredentials();
+    const apiBase = config.mode === 'LIVE' ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE;
+
     try {
-      const accessToken = await getPayPalAccessToken(BACKEND_PAYPAL_CLIENT_ID, BACKEND_PAYPAL_SECRET);
+      const accessToken = await getPayPalAccessToken();
 
       if (accessToken) {
         // Direct Server-to-Server Live Order Capture on PayPal Production API
-        const captureResponse = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderID}/capture`, {
+        const captureResponse = await fetch(`${apiBase}/v2/checkout/orders/${orderID}/capture`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -465,7 +713,7 @@ async function startServer() {
             success: true,
             status: 'COMPLETED',
             orderID: captureData.id || orderID,
-            merchantEmail: BACKEND_PAYPAL_EMAIL,
+            merchantEmail: config.merchantEmail,
             payerEmail: captureData.payer?.email_address || customerEmail || 'buyer@kraezelvbeatz.com'
           });
         } else {
@@ -487,7 +735,7 @@ async function startServer() {
         success: true,
         status: 'COMPLETED',
         orderID,
-        merchantEmail: BACKEND_PAYPAL_EMAIL,
+        merchantEmail: config.merchantEmail,
         message: 'PayPal payment verified and captured successfully.'
       });
     } catch (err: any) {
@@ -580,7 +828,7 @@ async function startServer() {
   app.use(vite.middlewares);
 
   app.listen(3000, '0.0.0.0', () => {
-    console.log(`Backend Server running on port 3000 with PayPal LIVE Merchant [${BACKEND_PAYPAL_EMAIL}]`);
+    console.log(`Backend Server running on port 3000 with PayPal LIVE Merchant [${getPayPalEmail()}]`);
   });
 }
 

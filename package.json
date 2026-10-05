@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@paypal/paypal-js": "^11.2.1",
     "@types/web-push": "^3.6.4",
     "clsx": "^2.1.1",
     "dotenv": "^16.4.7",

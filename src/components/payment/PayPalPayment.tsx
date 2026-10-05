@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { loadScript } from '@paypal/paypal-js';
 
 interface PayPalButtonProps {
   amount: number;
@@ -20,28 +21,24 @@ let cachedConfig: PayPalConfig | null = null;
 let cachedSdkPromise: Promise<any> | null = null;
 
 export function fetchPayPalConfig(): Promise<PayPalConfig> {
-  if (cachedConfig) return Promise.resolve(cachedConfig);
+  if (cachedConfig && cachedConfig.clientId && cachedConfig.clientId !== 'sb') return Promise.resolve(cachedConfig);
   if (cachedConfigPromise) return cachedConfigPromise;
 
   cachedConfigPromise = fetch('/api/config/paypal')
     .then(res => res.json())
     .then(data => {
+      if (data.configured === false) {
+        throw new Error(data.message || 'PayPal credentials are not configured on the server.');
+      }
       const rawId = data.clientId ? data.clientId.toString().trim() : '';
+      if (!rawId) {
+        throw new Error('PayPal Client ID is missing from server configuration.');
+      }
       const email = data.merchantEmail || 'kraezelvbeatz@gmail.com';
       const config: PayPalConfig = {
-        clientId: rawId || (import.meta.env.VITE_PAYPAL_CLIENT_ID || ''),
+        clientId: rawId,
         merchantEmail: email,
         currency: data.currency || 'USD'
-      };
-      cachedConfig = config;
-      return config;
-    })
-    .catch(err => {
-      console.warn('[PAYPAL_DIAGNOSTIC] Backend config fetch note, using fallback:', err);
-      const config: PayPalConfig = {
-        clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
-        merchantEmail: 'kraezelvbeatz@gmail.com',
-        currency: 'USD'
       };
       cachedConfig = config;
       return config;
@@ -60,61 +57,61 @@ export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
     return cachedSdkPromise;
   }
 
-  cachedSdkPromise = fetchPayPalConfig().then(config => {
-    const sanitizedClientId = config.clientId.trim().replace(/^['"]|['"]$/g, '');
-    if (!sanitizedClientId) {
-      throw new Error('Missing PayPal Client ID');
-    }
-
-    if (win.paypal && win.paypal.Buttons) {
-      return win.paypal;
-    }
-
-    const scriptId = 'paypal-js-sdk-live-unique';
-    let script = document.getElementById(scriptId) as HTMLScriptElement;
-
-    return new Promise((resolve, reject) => {
-      const onScriptReady = () => {
-        const paypal = (window as any).paypal;
-        if (paypal && paypal.Buttons) {
-          console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED');
-          resolve(paypal);
-        } else {
-          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: paypal.Buttons is undefined');
-          reject(new Error('PayPal SDK loaded but Buttons component is unavailable.'));
-        }
-      };
-
-      if (!script) {
-        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADING');
-        script = document.createElement('script');
-        script.id = scriptId;
-        script.src = `https://www.paypal.com/sdk/js?client-id=${sanitizedClientId}&currency=${currency}&intent=capture`;
-        script.async = true;
-        script.onload = () => {
-          script.setAttribute('data-status', 'loaded');
-          onScriptReady();
-        };
-        script.onerror = () => {
-          script.setAttribute('data-status', 'failed');
-          cachedSdkPromise = null;
-          console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED: Failed to fetch PayPal Live SDK script.');
-          reject(new Error('Failed to load Live PayPal payment network.'));
-        };
-        document.head.appendChild(script);
-      } else {
-        if (script.getAttribute('data-status') === 'loaded' && win.paypal?.Buttons) {
-          onScriptReady();
-        } else {
-          script.addEventListener('load', onScriptReady, { once: true });
-          script.addEventListener('error', () => {
-            cachedSdkPromise = null;
-            reject(new Error('Failed to load Live PayPal payment network.'));
-          }, { once: true });
-        }
+  cachedSdkPromise = fetchPayPalConfig()
+    .then(config => {
+      const clientId = config.clientId.trim().replace(/^['"]|['"]$/g, '');
+      if (!clientId) {
+        throw new Error('PayPal Client ID is required for checkout.');
       }
+
+      if (win.paypal && win.paypal.Buttons) {
+        return win.paypal;
+      }
+
+      const sdkUrl = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture&commit=true&components=buttons`;
+      console.log(`[PAYPAL_DIAGNOSTIC] SDK_LOADING_STARTED: URL=${sdkUrl}`);
+
+      return loadScript({
+        clientId: clientId,
+        currency: currency,
+        intent: 'capture',
+        commit: true,
+        components: 'buttons'
+      });
+    })
+    .then(paypal => {
+      if (paypal && paypal.Buttons) {
+        console.log('[PAYPAL_DIAGNOSTIC] PAYPAL_SDK_LOADED_SUCCESSFULLY');
+        return paypal;
+      }
+      throw new Error('PayPal SDK loaded but Buttons component was not found.');
+    })
+    .catch(err => {
+      cachedSdkPromise = null;
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const rawErrorStr = err?.message || String(err);
+      const isCspFailure = 
+        rawErrorStr.toLowerCase().includes('content security policy') ||
+        rawErrorStr.toLowerCase().includes('csp') ||
+        rawErrorStr.toLowerCase().includes('refused to load');
+
+      console.error('[PAYPAL_DIAGNOSTIC] SDK_LOAD_FAILED', {
+        URL: `https://www.paypal.com/sdk/js?client-id=${cachedConfig?.clientId || 'UNKNOWN'}&currency=${currency}&intent=capture&commit=true&components=buttons`,
+        ERROR: rawErrorStr,
+        ONLINE: isOnline,
+        ORIGIN: origin,
+        CONFIGURED: Boolean(cachedConfig?.clientId),
+        ENVIRONMENT: 'LIVE',
+        CSP_SUSPECTED: isCspFailure
+      });
+
+      if (isCspFailure) {
+        console.error('[PAYPAL_DIAGNOSTIC] CSP_HEADER_CHECK: Content Security Policy blocked www.paypal.com. Verify script-src and connect-src in server.ts.');
+      }
+
+      throw err;
     });
-  });
 
   return cachedSdkPromise;
 }
@@ -341,8 +338,12 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
       })
       .catch(err => {
         if (isCancelled) return;
-        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED:', err?.message || err);
-        setLoadError(err?.message || 'Failed to load PayPal checkout.');
+        const rawMsg = err?.message || String(err);
+        const formattedMsg = rawMsg.toLowerCase().includes('failed to load')
+          ? 'PayPal JS SDK script failed to load (Verify Client ID in PayPal Developer Portal).'
+          : rawMsg;
+        console.error('[PAYPAL_DIAGNOSTIC] PAYPAL_RENDER_FAILED:', rawMsg);
+        setLoadError(formattedMsg);
       });
 
     return () => {
@@ -356,6 +357,46 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
       }
     };
   }, [currency, retryKey]);
+
+  const [isProcessingDirect, setIsProcessingDirect] = useState(false);
+
+  const handleDirectServerCheckout = async () => {
+    setIsProcessingDirect(true);
+    try {
+      console.log('[PAYPAL_DIAGNOSTIC] DIRECT_SERVER_ORDER_STARTED');
+      const createRes = await fetch('/api/paypal/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, currency, description })
+      });
+      const createData = await createRes.json();
+
+      if (!createRes.ok || !createData.success) {
+        throw new Error(createData.message || 'Failed to initialize PayPal order.');
+      }
+
+      const orderID = createData.id || `DIRECT_PAYPAL_${Date.now()}`;
+
+      const captureRes = await fetch('/api/paypal/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderID, customerEmail: 'buyer@kraezelvbeatz.com' })
+      });
+      const captureData = await captureRes.json();
+
+      if (captureRes.ok && captureData.success) {
+        console.log('[PAYPAL_DIAGNOSTIC] DIRECT_SERVER_CAPTURE_SUCCESS');
+        onSuccess(captureData);
+      } else {
+        throw new Error(captureData.message || 'PayPal payment verification failed.');
+      }
+    } catch (err: any) {
+      console.error('[PAYPAL_DIAGNOSTIC] DIRECT_SERVER_CHECKOUT_ERROR:', err?.message || err);
+      onError(err);
+    } finally {
+      setIsProcessingDirect(false);
+    }
+  };
 
   const handleRetry = () => {
     cachedSdkPromise = null;
@@ -383,12 +424,22 @@ export const PayPalPayment: React.FC<PayPalButtonProps> = ({
         <div className="bg-red-950/40 border border-red-500/30 p-6 rounded-xl flex flex-col items-center gap-4 text-center">
           <p className="text-sm font-bold text-red-400 uppercase tracking-wider">PAYPAL CONNECTING</p>
           <p className="text-xs text-neutral-400 leading-relaxed uppercase">{loadError}</p>
-          <button 
-            onClick={handleRetry}
-            className="mt-2 px-6 py-3 border border-red-500/50 hover:bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-[0.2em] transition-all cursor-pointer"
-          >
-            Retry Connection
-          </button>
+          
+          <div className="flex flex-col gap-2.5 w-full mt-2">
+            <button
+              onClick={handleDirectServerCheckout}
+              disabled={isProcessingDirect}
+              className="w-full py-3.5 bg-amber-400 text-black font-black text-xs uppercase tracking-widest hover:bg-amber-300 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+            >
+              {isProcessingDirect ? 'Processing Express Order...' : 'Pay via PayPal Direct Express Order'}
+            </button>
+            <button 
+              onClick={handleRetry}
+              className="w-full py-2.5 border border-white/10 hover:bg-white/5 text-white/60 text-[10px] font-black uppercase tracking-[0.2em] transition-all cursor-pointer"
+            >
+              Retry SDK Connection
+            </button>
+          </div>
         </div>
       ) : (
         <div className="relative min-h-[140px] flex flex-col justify-center">

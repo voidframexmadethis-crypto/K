@@ -12,6 +12,19 @@ import { SpotifyMasteringStudioModal } from './SpotifyMasteringStudioModal';
 import { hiFiAudioEngine, MASTER_PRESETS, MasterPresetId } from '../../lib/hiFiAudioEngine';
 import { cn } from '../../lib/utils';
 
+function getPlayableAudioUrl(rawUrl: string): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+
+  // Rewrite Internet Archive details page links to direct download/stream links
+  if (trimmed.includes('archive.org/details/')) {
+    return trimmed.replace('archive.org/details/', 'archive.org/download/');
+  }
+
+  return trimmed;
+}
+
 export const PersistentPlayer = () => {
   const { 
     currentBeat, isPlaying, volume, progress, duration, 
@@ -21,6 +34,9 @@ export const PersistentPlayer = () => {
   } = useAudioStore();
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentAudioUrlRef = useRef<string>('');
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+
   const [isLicenseOpen, setIsLicenseOpen] = useState(false);
   const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -41,19 +57,95 @@ export const PersistentPlayer = () => {
     };
   }, [currentBeat]);
 
+  // Handle Beat Selection, Audio Loading, and Play/Pause Lifecycle Safely
   useEffect(() => {
-    if (audioRef.current) {
-      // Initialize 32-bit DSP Engine
-      hiFiAudioEngine.initialize(audioRef.current);
+    const audio = audioRef.current;
+    if (!audio || !currentBeat) return;
 
+    const rawUrl = currentBeat.audioUrl || currentBeat.storage?.durableUrl || '';
+    const playableUrl = getPlayableAudioUrl(rawUrl);
+
+    if (!playableUrl) {
+      console.warn('[AUDIO_PLAYER] Missing audio URL for beat:', currentBeat.id, currentBeat.title);
+      setPlaybackError('No master audio URL attached');
+      setPlaying(false);
+      return;
+    }
+
+    // Track change detection
+    if (currentAudioUrlRef.current !== playableUrl) {
+      console.log(`[AUDIO_PLAYER] Loading master audio track [${currentBeat.title}]:`, playableUrl);
+      currentAudioUrlRef.current = playableUrl;
+      setPlaybackError(null);
+
+      // 1. Stop current playback safely
+      audio.pause();
+
+      // 2. Assign new playable source URL
+      audio.src = playableUrl;
+
+      // 3. Reset progress state
+      setProgress(0);
+      setDuration(0);
+
+      // 4. Trigger explicit load
+      audio.load();
+
+      // 5. Initialize Web Audio DSP Engine
+      try {
+        hiFiAudioEngine.initialize(audio);
+      } catch (e) {
+        console.warn('[AUDIO_PLAYER] DSP Engine Init note:', e);
+      }
+
+      // 6. Safe play when ready
+      const playWhenReady = () => {
+        if (useAudioStore.getState().isPlaying) {
+          hiFiAudioEngine.resume();
+          audio.play().catch((err: any) => {
+            console.warn('[AUDIO_PLAYER] Deferred play error:', err?.message || err);
+            setPlaying(false);
+          });
+        }
+      };
+
+      if (audio.readyState >= 2) {
+        playWhenReady();
+      } else {
+        const handleCanPlay = () => {
+          audio.removeEventListener('canplay', handleCanPlay);
+          audio.removeEventListener('loadeddata', handleCanPlay);
+          playWhenReady();
+        };
+        audio.addEventListener('canplay', handleCanPlay);
+        audio.addEventListener('loadeddata', handleCanPlay);
+      }
+    } else {
+      // Toggle play/pause on current track
       if (isPlaying) {
         hiFiAudioEngine.resume();
-        audioRef.current.play().catch(() => setPlaying(false));
+        if (audio.readyState < 2) {
+          const handleCanPlay = () => {
+            audio.removeEventListener('canplay', handleCanPlay);
+            if (useAudioStore.getState().isPlaying) {
+              audio.play().catch((err) => {
+                console.warn('[AUDIO_PLAYER] Play error:', err?.message || err);
+                setPlaying(false);
+              });
+            }
+          };
+          audio.addEventListener('canplay', handleCanPlay);
+        } else {
+          audio.play().catch((err) => {
+            console.warn('[AUDIO_PLAYER] Play error:', err?.message || err);
+            setPlaying(false);
+          });
+        }
       } else {
-        audioRef.current.pause();
+        audio.pause();
       }
     }
-  }, [isPlaying, currentBeat, setPlaying]);
+  }, [currentBeat?.id, currentBeat?.audioUrl, isPlaying]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -71,6 +163,35 @@ export const PersistentPlayer = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
     }
+  };
+
+  const handleAudioError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+    const audio = e.currentTarget;
+    const err = audio.error;
+    const currentSrc = audio.src;
+
+    console.error('[AUDIO_PLAYER_ERROR] Media element error:', {
+      code: err?.code,
+      message: err?.message,
+      currentSrc,
+      beatTitle: currentBeat?.title
+    });
+
+    // Attempt server audio proxy fallback if direct stream fails due to CORS or range headers
+    if (currentBeat?.audioUrl && !currentSrc.includes('/api/audio/proxy')) {
+      const directUrl = getPlayableAudioUrl(currentBeat.audioUrl);
+      const proxyUrl = `/api/audio/proxy?url=${encodeURIComponent(directUrl)}`;
+      console.log('[AUDIO_PLAYER] Attempting server proxy fallback:', proxyUrl);
+      audio.src = proxyUrl;
+      audio.load();
+      if (isPlaying) {
+        audio.play().catch(() => setPlaying(false));
+      }
+      return;
+    }
+
+    setPlaybackError('Audio playback error (format or media host issue)');
+    setPlaying(false);
   };
 
   const handlePresetChange = (presetId: MasterPresetId) => {
@@ -156,11 +277,10 @@ export const PersistentPlayer = () => {
       <div className="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-2xl border-t border-white/10 z-[200] py-3 shadow-[0_-20px_80px_rgba(0,0,0,0.9)]">
         <audio
           ref={audioRef}
-          src={currentBeat.audioUrl}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
+          onError={handleAudioError}
           onEnded={next}
-          crossOrigin="anonymous"
         />
         
         <div className="max-w-[1800px] mx-auto px-6 md:px-12 grid grid-cols-12 gap-6 items-center">
@@ -185,8 +305,8 @@ export const PersistentPlayer = () => {
                 <span>{currentBeat.bpm} BPM</span>
               </div>
 
-              {/* Master Audio DSP Mode Indicator Badge */}
-              <div className="relative flex items-center gap-1.5">
+              {/* Master Audio DSP Mode Indicator Badge & Playback Error Indicator */}
+              <div className="relative flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={() => setIsMasteringStudioOpen(true)}
                   className={`px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 transition-all rounded-sm mt-0.5 ${
@@ -201,6 +321,12 @@ export const PersistentPlayer = () => {
                   <Sliders size={10} className="shrink-0" />
                   <span>DSP: {hiFiAudioEngine.getSettings().isBypassed ? 'RAW' : hiFiAudioEngine.getSettings().mode}</span>
                 </button>
+
+                {playbackError && (
+                  <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/40 text-red-400 text-[8px] font-mono font-bold uppercase tracking-widest rounded-sm mt-0.5">
+                    {playbackError}
+                  </span>
+                )}
               </div>
             </div>
           </div>
