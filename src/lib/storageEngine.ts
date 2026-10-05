@@ -2,10 +2,10 @@
  * KRAEZELV Storage Engine — ValleyFile Manual Link & Direct Storage Protocol
  * 
  * ValleyFile direct link integration:
- * - Producer uploads master MP3/M4A/ZIP to ValleyFile manually
+ * - Producer uploads master MP3/M4A/ZIP and Artwork (JPG/JPEG/PNG/WebP) manually to ValleyFile
  * - Copies the direct public ValleyFile link
  * - Direct link is validated and stored in Firestore beat/pack metadata
- * - Audio player and downloads stream directly from the durable ValleyFile URL
+ * - Audio player, storefront cards, and downloads use the durable ValleyFile URL
  * 
  * WAV format is strictly and permanently prohibited.
  */
@@ -28,7 +28,7 @@ export interface ValidationResult {
   error?: string;
   sanitizedUrl?: string;
   category: 'audio' | 'stems' | 'artwork' | 'pack';
-  fileType?: 'mp3' | 'm4a' | 'zip' | 'artwork';
+  fileType?: 'mp3' | 'm4a' | 'zip' | 'jpg' | 'jpeg' | 'png' | 'webp';
   storageProvider?: 'ValleyFile';
 }
 
@@ -46,7 +46,7 @@ export function validateValleyFileUrl(
     return {
       valid: false,
       category,
-      error: 'Please provide a valid ValleyFile Direct File URL.',
+      error: 'Please provide a valid ValleyFile Direct URL.',
     };
   }
 
@@ -96,7 +96,7 @@ export function validateValleyFileUrl(
     };
   }
 
-  let detectedFileType: 'mp3' | 'm4a' | 'zip' | 'artwork' = 'mp3';
+  let detectedFileType: 'mp3' | 'm4a' | 'zip' | 'jpg' | 'jpeg' | 'png' | 'webp' = 'mp3';
 
   if (category === 'audio') {
     const hasExtension = lowerPath.includes('.');
@@ -127,14 +127,27 @@ export function validateValleyFileUrl(
         return {
           valid: false,
           category,
-          error: 'Unsupported stems/pack archive format. Only .ZIP multi-track archives are permitted.',
+          error: 'Unsupported archive format. Only .ZIP multi-track archives are permitted.',
         };
       }
     }
   }
 
   if (category === 'artwork') {
-    detectedFileType = 'artwork';
+    detectedFileType = 'jpg';
+    const hasExtension = lowerPath.includes('.');
+    if (hasExtension) {
+      const ext = lowerPath.split('.').pop() || '';
+      if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+        detectedFileType = ext as any;
+      } else if (ext !== '') {
+        return {
+          valid: false,
+          category,
+          error: 'Unsupported image format. Only JPG, JPEG, PNG, and WebP artwork formats are permitted.',
+        };
+      }
+    }
   }
 
   return {
@@ -147,10 +160,7 @@ export function validateValleyFileUrl(
 }
 
 /**
- * Validates audio file name and format rules:
- * - MP3 allowed
- * - M4A allowed
- * - WAV strictly prohibited
+ * Validates audio file name and format rules
  */
 export function validateAudioFile(file: File | string): void {
   const fileName = typeof file === 'string' ? file : file.name;
@@ -196,18 +206,20 @@ export function createValleyFileStorageMetadata(params: {
  */
 export function createValleyFilePackStorageMetadata(params: {
   durableUrl: string;
+  artworkUrl?: string;
   fileName?: string;
 }) {
   return {
     provider: 'valleyfile' as const,
     durableUrl: params.durableUrl,
     fileType: 'zip' as const,
+    artworkUrl: params.artworkUrl,
     uploadedAt: new Date().toISOString(),
   };
 }
 
 /**
- * Compatibility wrapper for local file handling or direct image URL assignment
+ * Compatibility wrapper
  */
 export async function uploadToStorage(
   fileOrUrl: File | string,
@@ -234,7 +246,7 @@ export async function uploadToStorage(
       storage: {
         provider: 'valleyfile',
         durableUrl: cleanUrl,
-        fileType: validation.fileType === 'artwork' ? undefined : validation.fileType,
+        fileType: ['jpg', 'jpeg', 'png', 'webp'].includes(validation.fileType as string) ? undefined : (validation.fileType as any),
         fileUrl: cleanUrl,
         audioUrl: targetCategory === 'audio' ? cleanUrl : undefined,
         artworkUrl: targetCategory === 'artwork' ? cleanUrl : undefined,
@@ -244,7 +256,6 @@ export async function uploadToStorage(
     };
   }
 
-  // If a File object is passed, check format
   validateAudioFile(fileOrUrl);
   throw new Error(
     'Direct automated upload is not active. Please upload your file directly to ValleyFile and paste the direct public link.'

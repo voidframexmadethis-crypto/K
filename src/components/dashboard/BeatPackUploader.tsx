@@ -260,16 +260,80 @@ export const BeatPackUploader = () => {
           </div>
         </div>
 
-        {/* Artwork Image URL */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-white/60 block">Cover Artwork URL</label>
-          <input 
-            type="url"
-            value={artworkUrl}
-            onChange={(e) => setArtworkUrl(e.target.value)}
-            placeholder="https://images.unsplash.com/... or ValleyFile image link"
-            className="w-full bg-white/5 border border-white/15 p-4 text-xs font-mono text-white outline-none focus:border-purple-500 transition-colors"
-          />
+        {/* VALLEYFILE ARTWORK FILE URL CARD */}
+        <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-4">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Cover Artwork (ValleyFile) *</span>
+              <h4 className="text-lg font-black text-white uppercase">VALLEYFILE ARTWORK FILE URL</h4>
+            </div>
+            <ImageIcon size={24} className="text-white/40" />
+          </div>
+
+          <p className="text-[10px] text-white/40 uppercase font-medium">
+            Upload artwork manually to ValleyFile and paste the public direct URL below. Supported: JPG, JPEG, PNG, WebP.
+          </p>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
+                VALLEYFILE ARTWORK FILE URL *
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input 
+                  type="url"
+                  value={artworkUrl}
+                  onChange={(e) => setArtworkUrl(e.target.value)}
+                  placeholder="[ Paste ValleyFile image URL here ]"
+                  className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!artworkUrl) {
+                      alert('Please enter a ValleyFile artwork URL first.');
+                      return;
+                    }
+                    const check = validateValleyFileUrl(artworkUrl, 'artwork');
+                    if (check.valid) {
+                      alert(`✓ ValleyFile Artwork URL saved\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: ValleyFile`);
+                    } else {
+                      alert(`Validation Error: ${check.error}`);
+                    }
+                  }}
+                  className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
+                >
+                  Validate URL
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[10px] font-mono">
+              {artworkUrl ? (
+                (() => {
+                  const artCheck = validateValleyFileUrl(artworkUrl, 'artwork');
+                  return artCheck.valid ? (
+                    <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
+                      <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
+                        <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ ValleyFile Artwork URL saved</span>
+                        <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Verified</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
+                        <div>File type: <span className="text-white font-bold">{artCheck.fileType?.toUpperCase() || 'JPG'}</span></div>
+                        <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-sm flex items-center gap-1.5 font-bold uppercase">
+                      <AlertTriangle size={13} /> {artCheck.error}
+                    </div>
+                  );
+                })()
+              ) : (
+                <span className="text-white/40 uppercase">○ Paste your ValleyFile image URL above</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {statusMessage && (

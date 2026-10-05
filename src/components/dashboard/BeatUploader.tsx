@@ -789,9 +789,9 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <ImageIcon size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">4. Cover Artwork</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">4. Cover Artwork (ValleyFile)</h3>
               </div>
-              <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">3000x3000px Square</span>
+              <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">JPG, JPEG, PNG, WebP</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
@@ -810,20 +810,71 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
 
               <div className="md:col-span-8 space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-xl font-black uppercase text-white">Cover Image URL</h4>
+                  <h4 className="text-xl font-black uppercase text-white">VALLEYFILE ARTWORK FILE URL</h4>
                   <p className="text-xs text-white/40 uppercase tracking-wider">
-                    Paste a ValleyFile image link, Unsplash link, or custom image URL (JPG, PNG, WEBP).
+                    Upload artwork manually to ValleyFile and paste the public direct URL below. Supported: JPG, JPEG, PNG, WebP.
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <input 
-                    type="url"
-                    value={formData.artworkUrl}
-                    onChange={(e) => setFormData({ ...formData, artworkUrl: e.target.value })}
-                    placeholder="https://valleyfile.com/download/artwork.jpg or image URL"
-                    className="w-full bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
+                      VALLEYFILE ARTWORK FILE URL *
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input 
+                        type="url"
+                        value={formData.artworkUrl}
+                        onChange={(e) => setFormData({ ...formData, artworkUrl: e.target.value })}
+                        placeholder="[ Paste ValleyFile image URL here ]"
+                        className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!formData.artworkUrl) {
+                            alert('Please enter a ValleyFile artwork URL first.');
+                            return;
+                          }
+                          const check = validateValleyFileUrl(formData.artworkUrl, 'artwork');
+                          if (check.valid) {
+                            alert(`✓ ValleyFile Artwork URL saved\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: ValleyFile`);
+                          } else {
+                            alert(`Validation Error: ${check.error}`);
+                          }
+                        }}
+                        className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
+                      >
+                        Validate URL
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] font-mono">
+                    {formData.artworkUrl ? (
+                      (() => {
+                        const artCheck = validateValleyFileUrl(formData.artworkUrl, 'artwork');
+                        return artCheck.valid ? (
+                          <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
+                            <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
+                              <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ ValleyFile Artwork URL saved</span>
+                              <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Verified</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
+                              <div>File type: <span className="text-white font-bold">{artCheck.fileType?.toUpperCase() || 'JPG'}</span></div>
+                              <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-sm flex items-center gap-1.5 font-bold uppercase">
+                            <AlertTriangle size={13} /> {artCheck.error}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <span className="text-white/40 uppercase">○ Paste your ValleyFile image URL above</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3 pt-2">
