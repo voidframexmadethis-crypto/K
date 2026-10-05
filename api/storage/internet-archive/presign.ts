@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import type { IncomingMessage, ServerResponse } from 'http';
 import {
   validateIAFile,
   generateIAItemId,
@@ -6,68 +7,187 @@ import {
   UploadCategory,
 } from '../../../src/lib/internetArchiveCore.ts';
 
+// Helper to safely send JSON across Vercel, Express, and standard Node.js ServerResponse
+function sendJson(res: any, statusCode: number, data: any) {
+  try {
+    if (typeof res.status === 'function' && typeof res.json === 'function') {
+      return res.status(statusCode).json(data);
+    }
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify(data));
+  } catch (sendErr) {
+    console.error('[PRESIGN_SEND_JSON_ERROR]', sendErr);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.end('{"success":false,"error":"INTERNAL_SERVER_ERROR"}');
+    }
+  }
+}
+
+// Safely parse request body from parsed object, string, Buffer, or stream
+async function parseRequestBody(req: any): Promise<Record<string, any>> {
+  if (req.body) {
+    if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      return req.body;
+    }
+    if (typeof req.body === 'string') {
+      try {
+        return JSON.parse(req.body);
+      } catch {
+        return {};
+      }
+    }
+    if (Buffer.isBuffer(req.body)) {
+      try {
+        return JSON.parse(req.body.toString('utf-8'));
+      } catch {
+        return {};
+      }
+    }
+  }
+
+  // If req.body is undefined, read stream chunks
+  try {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    if (chunks.length > 0) {
+      const rawText = Buffer.concat(chunks).toString('utf-8');
+      return JSON.parse(rawText);
+    }
+  } catch (streamErr) {
+    console.warn('[PRESIGN_STREAM_PARSE_WARNING]', streamErr);
+  }
+
+  return {};
+}
+
 export default async function handler(req: any, res: any) {
   // CORS Preflight headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, x-beat-id, x-category, x-filename, x-title, x-producer, x-existing-item-id'
+  );
 
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    res.statusCode = 204;
+    return res.end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({
+    return sendJson(res, 405, {
       success: false,
+      stage: 'METHOD_CHECK',
       error: 'METHOD_NOT_ALLOWED',
       message: 'Only POST requests are permitted for presign requests.',
     });
   }
 
   try {
-    const accessKey = process.env.IA_ACCESS_KEY;
-    const secretKey = process.env.IA_SECRET_KEY;
-    const collection = process.env.IA_COLLECTION || 'opensource_audio';
+    // 1. Validate Environment Variables (Never expose secret values)
+    const accessKey = (process.env.IA_ACCESS_KEY || '').trim();
+    const secretKey = (process.env.IA_SECRET_KEY || '').trim();
+    const collection = (process.env.IA_COLLECTION || 'opensource_audio').trim();
 
-    if (!accessKey || !secretKey) {
-      return res.status(503).json({
+    if (!accessKey) {
+      return sendJson(res, 500, {
         success: false,
-        error: 'CONFIGURATION_REQUIRED',
-        message:
-          'Internet Archive credentials (IA_ACCESS_KEY, IA_SECRET_KEY) are not configured in server environment variables.',
+        stage: 'ENV_VALIDATION',
+        error: 'IA_ACCESS_KEY_MISSING',
+        message: 'IA_ACCESS_KEY is missing from server environment variables.',
       });
     }
 
-    // Parse JSON body
-    let bodyData = req.body;
-    if (typeof bodyData === 'string') {
+    if (!secretKey) {
+      return sendJson(res, 500, {
+        success: false,
+        stage: 'ENV_VALIDATION',
+        error: 'IA_SECRET_KEY_MISSING',
+        message: 'IA_SECRET_KEY is missing from server environment variables.',
+      });
+    }
+
+    // 2. Parse request query and body parameters
+    let query: Record<string, any> = req.query || {};
+    if ((!query || Object.keys(query).length === 0) && req.url) {
       try {
-        bodyData = JSON.parse(bodyData);
+        const urlObj = new URL(req.url, 'http://localhost');
+        query = Object.fromEntries(urlObj.searchParams.entries());
       } catch {
-        bodyData = {};
-      }
-    } else if (Buffer.isBuffer(bodyData)) {
-      try {
-        bodyData = JSON.parse(bodyData.toString('utf-8'));
-      } catch {
-        bodyData = {};
+        query = {};
       }
     }
-    bodyData = bodyData || {};
 
-    const rawFilename = (bodyData.filename || bodyData.fileName || 'asset').toString();
-    const rawCategory = (bodyData.category || 'audio').toString() as UploadCategory;
-    const rawMimeType = (bodyData.mimeType || bodyData.contentType || '').toString();
-    const beatId = (bodyData.beatId || `track_${Date.now()}`).toString();
-    const rawTitle = (bodyData.title || 'Instrumental Beat').toString();
-    const rawProducer = (bodyData.producer || 'KRAEZELV').toString();
-    const existingItemId = bodyData.existingItemId ? bodyData.existingItemId.toString() : undefined;
+    const bodyData = await parseRequestBody(req);
+    const headers = req.headers || {};
 
-    // 1. Strict Server-Side Validation: Reject WAV, validate MP3/M4A/ZIP/Images
+    const rawFilename = (
+      bodyData.filename ||
+      bodyData.fileName ||
+      query.filename ||
+      headers['x-filename'] ||
+      'asset'
+    ).toString();
+
+    const rawCategory = (
+      bodyData.category ||
+      query.category ||
+      headers['x-category'] ||
+      'audio'
+    ).toString() as UploadCategory;
+
+    const rawMimeType = (
+      bodyData.mimeType ||
+      bodyData.contentType ||
+      query.mimeType ||
+      headers['content-type'] ||
+      ''
+    ).toString();
+
+    const beatId = (
+      bodyData.beatId ||
+      query.beatId ||
+      headers['x-beat-id'] ||
+      `track_${Date.now()}`
+    ).toString();
+
+    const rawTitle = (
+      bodyData.title ||
+      query.title ||
+      headers['x-title'] ||
+      'Instrumental Beat'
+    ).toString();
+
+    const rawProducer = (
+      bodyData.producer ||
+      query.producer ||
+      headers['x-producer'] ||
+      'KRAEZELV'
+    ).toString();
+
+    const existingItemId = (
+      bodyData.existingItemId ||
+      query.existingItemId ||
+      headers['x-existing-item-id'] ||
+      undefined
+    )
+      ? String(
+          bodyData.existingItemId ||
+            query.existingItemId ||
+            headers['x-existing-item-id']
+        )
+      : undefined;
+
+    // 3. Strict Server-Side Validation: Reject WAV, enforce MP3/M4A/ZIP/Images
     const validation = validateIAFile(rawFilename, rawCategory, rawMimeType);
     if (!validation.valid) {
-      return res.status(400).json({
+      return sendJson(res, 400, {
         success: false,
+        stage: 'FILE_VALIDATION',
         error: 'INVALID_FILE_TYPE',
         message: validation.error || 'File validation failed against security policy.',
       });
@@ -77,10 +197,10 @@ export default async function handler(req: any, res: any) {
     const sanitizedFileName = validation.sanitizedFileName;
     const mimeType = validation.mimeType;
 
-    // 2. Deterministic Item ID generation
+    // 4. Deterministic Item ID generation
     const itemId = generateIAItemId(beatId, existingItemId);
 
-    // 3. Map category to Internet Archive mediatype
+    // 5. Map category to Internet Archive mediatype
     let mediaType = 'audio';
     if (category === 'artwork') mediaType = 'image';
     else if (category === 'stems') mediaType = 'data';
@@ -89,14 +209,14 @@ export default async function handler(req: any, res: any) {
     const safeTitle = rawTitle.replace(/[^\x20-\x7E]/g, '').trim() || 'Instrumental Beat';
     const safeCreator = rawProducer.replace(/[^\x20-\x7E]/g, '').trim() || 'KRAEZELV';
 
-    // 4. Set expiration window (30 minutes)
+    // 6. Set expiration window (30 minutes)
     const expiresInSeconds = 1800;
     const expires = Math.floor(Date.now() / 1000) + expiresInSeconds;
 
-    // 5. Build canonical S3 path
+    // 7. Build canonical S3 path
     const canonicalResource = `/${itemId}/${category}/${encodeURIComponent(sanitizedFileName)}`;
 
-    // 6. Construct Archive metadata headers
+    // 8. Construct Archive metadata headers
     const archiveHeaders: Record<string, string> = {
       'x-archive-auto-make-bucket': '1',
       'x-archive-meta-collection': collection,
@@ -112,7 +232,7 @@ export default async function handler(req: any, res: any) {
       canonicalAmzHeaders += `${key.toLowerCase()}:${archiveHeaders[key].trim()}\n`;
     }
 
-    // 7. S3 V2 Presigned URL String-To-Sign:
+    // 9. S3 V2 Presigned URL String-To-Sign:
     // PUT\n + Content-MD5\n + Content-Type\n + Expires\n + CanonicalizedAmzHeaders + CanonicalizedResource
     const stringToSign = `PUT\n\n${mimeType}\n${expires}\n${canonicalAmzHeaders}${canonicalResource}`;
 
@@ -133,7 +253,7 @@ export default async function handler(req: any, res: any) {
       ...archiveHeaders,
     };
 
-    return res.status(200).json({
+    return sendJson(res, 200, {
       success: true,
       uploadUrl,
       durableUrl,
@@ -146,8 +266,9 @@ export default async function handler(req: any, res: any) {
     });
   } catch (err: any) {
     console.error('[PRESIGN_API_ERROR]', err?.message || err);
-    return res.status(500).json({
+    return sendJson(res, 500, {
       success: false,
+      stage: 'SIGNATURE_GENERATION',
       error: 'PRESIGN_FAILED',
       message: err?.message || 'Failed to generate Internet Archive presigned upload URL.',
     });

@@ -99,9 +99,11 @@ export async function uploadToStorage(
     }
   }
 
+  const presignUrl = `/api/storage/internet-archive/presign?category=${encodeURIComponent(targetCategory)}&beatId=${encodeURIComponent(cleanBeatId)}&filename=${encodeURIComponent(sanitizedName)}`;
+
   let presignRes: Response;
   try {
-    presignRes = await fetch('/api/storage/internet-archive/presign', {
+    presignRes = await fetch(presignUrl, {
       method: 'POST',
       headers: presignHeaders,
       body: JSON.stringify(presignPayload),
