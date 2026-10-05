@@ -103,6 +103,26 @@ class HiFiDSPAudioEngine {
 
   // Initialize DSP pipeline attached to HTMLAudioElement safely without duplicate nodes
   public initialize(audioElement: HTMLAudioElement) {
+    // Check if audio element is playing cross-origin media without CORS credentials
+    // The W3C Web Audio API specification requires MediaElementAudioSourceNode to output
+    // zeros (silence) for cross-origin media lacking CORS. To preserve full audible playback,
+    // we bypass MediaElementAudioSourceNode and let the browser play native high-res audio.
+    const isCrossOriginNoCors = (() => {
+      if (!audioElement || !audioElement.src) return false;
+      try {
+        const u = new URL(audioElement.src, typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+        return u.origin !== window.location.origin && !audioElement.crossOrigin;
+      } catch (e) {
+        return false;
+      }
+    })();
+
+    if (isCrossOriginNoCors) {
+      console.log('[HIFI_AUDIO_ENGINE] Native Direct Playback Active (Preserving audible output for direct media stream)');
+      this.isFallbackActive = true;
+      return;
+    }
+
     // If already attached to this exact audio element, just ensure AudioContext is active
     if (this.isInitialized && this.attachedAudioElement === audioElement && this.ctx) {
       if (this.ctx.state === 'suspended') {
