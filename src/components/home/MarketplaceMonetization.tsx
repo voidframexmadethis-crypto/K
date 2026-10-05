@@ -4,8 +4,10 @@ import { ServiceItem, SoundKit } from '../../types';
 import { ServicesModal } from './ServicesModal';
 import { cn } from '../../lib/utils';
 import { Link } from 'react-router-dom';
+import { useBeatPackStore } from '../../store/useBeatPackStore';
 
 export const MarketplaceMonetization: React.FC = () => {
+  const { packs } = useBeatPackStore();
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
 
@@ -156,37 +158,51 @@ export const MarketplaceMonetization: React.FC = () => {
           </h2>
         </div>
 
-        {soundKits.length > 0 ? (
+        {packs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {soundKits.map(kit => (
-              <div key={kit.id} className="p-8 bg-white/[0.02] border border-white/10 flex flex-col justify-between gap-6 group hover:border-white/30 transition-all">
-                <div className="space-y-4">
-                  <div className="relative aspect-video overflow-hidden bg-neutral-900 border border-white/5">
-                    <img src={kit.artworkUrl} alt={kit.title} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
-                    <div className="absolute top-4 left-4 px-3 py-1 bg-black/80 border border-white/10 text-[8px] font-black uppercase text-white tracking-widest">
-                      {kit.type}
+            {packs.map(pack => {
+              const downloadUrl = pack.storage?.durableUrl || pack.zipUrl || pack.downloadUrl;
+              return (
+                <div key={pack.id} className="p-8 bg-white/[0.02] border border-white/10 flex flex-col justify-between gap-6 group hover:border-white/30 transition-all">
+                  <div className="space-y-4">
+                    <div className="relative aspect-video overflow-hidden bg-neutral-900 border border-white/5">
+                      <img src={pack.artworkUrl} alt={pack.title} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                      <div className="absolute top-4 left-4 px-3 py-1 bg-black/80 border border-white/10 text-[8px] font-black uppercase text-white tracking-widest">
+                        BEAT PACK
+                      </div>
                     </div>
+
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black uppercase text-white tracking-tight">{pack.title}</h3>
+                    </div>
+
+                    <p className="text-xs text-white/60 uppercase font-medium leading-relaxed line-clamp-2">{pack.description}</p>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black uppercase text-white tracking-tight">{kit.title}</h3>
-                  </div>
+                  <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] font-black uppercase text-emerald-400">ValleyFile ZIP Attached</span>
+                      <span className="text-2xl font-black text-white">${pack.price.toFixed(2)}</span>
+                    </div>
 
-                  <p className="text-xs text-white/60 uppercase font-medium leading-relaxed">{kit.description}</p>
+                    {downloadUrl ? (
+                      <a 
+                        href={downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-6 py-3 bg-white text-black hover:bg-purple-600 hover:text-white font-black uppercase text-[10px] tracking-[0.2em] transition-all flex items-center gap-2 rounded-xs"
+                      >
+                        <Download size={14} /> Download ZIP
+                      </a>
+                    ) : (
+                      <button disabled className="px-6 py-3 bg-white/10 text-white/40 font-black uppercase text-[10px] tracking-[0.2em] rounded-xs cursor-not-allowed">
+                        Unavailable
+                      </button>
+                    )}
+                  </div>
                 </div>
-
-                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-black uppercase text-white/30">{kit.itemCount} Items · {kit.fileSize}</span>
-                    <span className="text-2xl font-black text-white">${kit.price.toFixed(2)}</span>
-                  </div>
-
-                  <button className="px-8 py-4 bg-white text-black font-black uppercase text-[10px] tracking-[0.3em] hover:bg-neutral-200 transition-all flex items-center gap-2">
-                    <Download size={14} /> Instant Pack Download
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="p-12 bg-neutral-950 border border-white/10 text-center flex flex-col items-center justify-center gap-4">
@@ -197,8 +213,8 @@ export const MarketplaceMonetization: React.FC = () => {
                 Preset banks, drum kits, and MIDI packs will appear here once published.
               </p>
             </div>
-            <Link to="/dashboard" className="px-8 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-200 transition-colors">
-              <Upload size={14} /> Open Producer Dashboard
+            <Link to="/dashboard/upload-pack" className="px-8 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-200 transition-colors">
+              <Upload size={14} /> Create Beat Pack
             </Link>
           </div>
         )}

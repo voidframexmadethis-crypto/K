@@ -33,13 +33,6 @@ import webpush from 'web-push';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { INITIAL_DEFAULT_BEATS } from './src/data/defaultCatalog.ts';
-import {
-  validateIAFile,
-  generateIAItemId,
-  executeIAUpload,
-} from './src/lib/internetArchiveCore.ts';
-import handleInternetArchiveUpload from './api/storage/internet-archive/upload.ts';
-import handleInternetArchivePresign from './api/storage/internet-archive/presign.ts';
 
 // Load environment variables
 dotenv.config();
@@ -200,20 +193,6 @@ async function startServer() {
       size: req.body.length
     });
   });
-
-  // Internet Archive Presign Route (Direct S3 upload authorization)
-  app.post(
-    '/api/storage/internet-archive/presign',
-    express.json(),
-    handleInternetArchivePresign
-  );
-
-  // Internet Archive Upload Route (Legacy / Fallback)
-  app.post(
-    '/api/storage/internet-archive/upload',
-    express.raw({ type: '*/*', limit: '200mb' }),
-    handleInternetArchiveUpload
-  );
 
   // API endpoint to serve public PayPal config securely from backend
   app.get('/api/config/paypal', (req: Request, res: Response) => {

@@ -1,176 +1,254 @@
 /**
- * KRAEZELV Persistent Storage & Streaming Engine
- * Cloudflare Pages Function -> Internet Archive Pipeline
- * Durable media hosting on Internet Archive with metadata persisted in Firestore.
+ * KRAEZELV Storage Engine — ValleyFile Manual Link & Direct Storage Protocol
+ * 
+ * ValleyFile direct link integration:
+ * - Producer uploads master MP3/M4A/ZIP to ValleyFile manually
+ * - Copies the direct public ValleyFile link
+ * - Direct link is validated and stored in Firestore beat/pack metadata
+ * - Audio player and downloads stream directly from the durable ValleyFile URL
+ * 
+ * WAV format is strictly and permanently prohibited.
  */
 
-import {
-  validateIAFile,
-  UploadCategory,
-  IAUploadResult,
-} from './internetArchiveCore.ts';
-import { auth } from './firebase.ts';
+import { BeatStorageMetadata, UploadCategory } from '../types';
 
 export interface StorageAssetResult {
   assetId: string;
-  cdnUrl: string; // Durable HTTPS Internet Archive stream/download URL
-  archiveUrl: string; // Archive path (${itemId}/${category}/${fileName})
+  cdnUrl: string; // Durable ValleyFile / Direct HTTPS URL
+  archiveUrl: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
   itemId?: string;
-  storage?: {
-    provider: 'internet_archive';
-    itemId: string;
-    fileUrl: string;
-    category: UploadCategory;
-    fileName: string;
-    size: number;
-    mimeType: string;
-    uploadedAt: string;
+  storage?: BeatStorageMetadata;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  sanitizedUrl?: string;
+  category: 'audio' | 'stems' | 'artwork' | 'pack';
+  fileType?: 'mp3' | 'm4a' | 'zip' | 'artwork';
+  storageProvider?: 'ValleyFile';
+}
+
+/**
+ * Validates a ValleyFile or direct public media URL against security and format policies.
+ * WAV format is permanently prohibited.
+ */
+export function validateValleyFileUrl(
+  urlInput: string,
+  category: 'audio' | 'stems' | 'artwork' | 'pack' = 'audio'
+): ValidationResult {
+  const trimmed = (urlInput || '').trim();
+
+  if (!trimmed) {
+    return {
+      valid: false,
+      category,
+      error: 'Please provide a valid ValleyFile Direct File URL.',
+    };
+  }
+
+  // Reject local blob or data URLs
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return {
+      valid: false,
+      category,
+      error: 'Local blob: and base64 data: URLs are temporary. Please paste a permanent public ValleyFile URL.',
+    };
+  }
+
+  // Must be a valid HTTPS / HTTP URL
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return {
+        valid: false,
+        category,
+        error: 'URL must start with https:// or http://',
+      };
+    }
+  } catch {
+    return {
+      valid: false,
+      category,
+      error: 'The provided ValleyFile URL is not a valid web address.',
+    };
+  }
+
+  const lowerPath = parsedUrl.pathname.toLowerCase();
+  const lowerFull = trimmed.toLowerCase();
+
+  // 1. ABSOLUTE RULE: Reject WAV format everywhere
+  if (
+    lowerPath.endsWith('.wav') ||
+    lowerFull.includes('.wav?') ||
+    lowerFull.includes('format=wav') ||
+    lowerFull.includes('mime=audio/wav') ||
+    lowerFull.includes('audio/x-wav')
+  ) {
+    return {
+      valid: false,
+      category,
+      error: 'WAV format is strictly prohibited. Please upload high-resolution MP3 or M4A master files to ValleyFile.',
+    };
+  }
+
+  let detectedFileType: 'mp3' | 'm4a' | 'zip' | 'artwork' = 'mp3';
+
+  if (category === 'audio') {
+    const hasExtension = lowerPath.includes('.');
+    if (hasExtension) {
+      const ext = lowerPath.split('.').pop() || '';
+      if (ext === 'm4a') {
+        detectedFileType = 'm4a';
+      } else if (ext === 'mp3' || ext === 'aac' || ext === 'ogg') {
+        detectedFileType = 'mp3';
+      } else if (ext !== '') {
+        return {
+          valid: false,
+          category,
+          error: 'Unsupported audio format. Only MP3 and M4A audio URLs are permitted.',
+        };
+      }
+    } else {
+      detectedFileType = lowerFull.includes('m4a') ? 'm4a' : 'mp3';
+    }
+  }
+
+  if (category === 'stems' || category === 'pack') {
+    detectedFileType = 'zip';
+    const hasExtension = lowerPath.includes('.');
+    if (hasExtension) {
+      const ext = lowerPath.split('.').pop() || '';
+      if (!['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) && ext !== '') {
+        return {
+          valid: false,
+          category,
+          error: 'Unsupported stems/pack archive format. Only .ZIP multi-track archives are permitted.',
+        };
+      }
+    }
+  }
+
+  if (category === 'artwork') {
+    detectedFileType = 'artwork';
+  }
+
+  return {
+    valid: true,
+    category,
+    sanitizedUrl: trimmed,
+    fileType: detectedFileType,
+    storageProvider: 'ValleyFile',
   };
 }
 
 /**
- * Validates audio format rules:
+ * Validates audio file name and format rules:
  * - MP3 allowed
  * - M4A allowed
  * - WAV strictly prohibited
  */
-export function validateAudioFile(file: File): void {
-  const result = validateIAFile(file.name, 'audio', file.type);
-  if (!result.valid) {
-    throw new Error(result.error || 'Audio validation failed');
+export function validateAudioFile(file: File | string): void {
+  const fileName = typeof file === 'string' ? file : file.name;
+  const lower = fileName.toLowerCase();
+
+  if (lower.endsWith('.wav') || (typeof file !== 'string' && file.type.includes('wav'))) {
+    throw new Error('WAV format is strictly prohibited. Please upload high-resolution MP3 or M4A files to ValleyFile.');
+  }
+
+  if (
+    !lower.endsWith('.mp3') &&
+    !lower.endsWith('.m4a') &&
+    (typeof file === 'string' || (!file.type.includes('audio/mpeg') && !file.type.includes('audio/mp4')))
+  ) {
+    throw new Error('Unsupported audio format. Only MP3 and M4A files are permitted.');
   }
 }
 
 /**
- * Uploads media assets directly to Internet Archive using an ephemeral,
- * server-generated S3 Presigned PUT URL.
- * 
- * Flow:
- * 1. Browser sends lightweight metadata to /api/storage/internet-archive/presign (~1KB)
- * 2. Vercel function signs the request using server-side IA credentials (never exposed to browser)
- * 3. Browser directly streams the full file to https://s3.us.archive.org via HTTP PUT (bypasses 4.5MB Vercel limit)
- * 4. Browser receives confirmation and returns the durable archive.org URL
+ * Helper to build standard ValleyFile storage metadata for Firestore beats
+ */
+export function createValleyFileStorageMetadata(params: {
+  audioUrl: string;
+  fileType?: 'mp3' | 'm4a' | 'zip';
+  artworkUrl?: string;
+  stemsUrl?: string;
+  fileName?: string;
+}): BeatStorageMetadata {
+  return {
+    provider: 'valleyfile',
+    durableUrl: params.audioUrl,
+    fileType: params.fileType || (params.audioUrl.toLowerCase().includes('.m4a') ? 'm4a' : 'mp3'),
+    fileUrl: params.audioUrl,
+    audioUrl: params.audioUrl,
+    artworkUrl: params.artworkUrl,
+    stemsUrl: params.stemsUrl,
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Helper to build standard ValleyFile storage metadata for Firestore beat packs
+ */
+export function createValleyFilePackStorageMetadata(params: {
+  durableUrl: string;
+  fileName?: string;
+}) {
+  return {
+    provider: 'valleyfile' as const,
+    durableUrl: params.durableUrl,
+    fileType: 'zip' as const,
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Compatibility wrapper for local file handling or direct image URL assignment
  */
 export async function uploadToStorage(
-  file: File,
+  fileOrUrl: File | string,
   category: 'audio' | 'stems' | 'artwork' | 'video' = 'audio',
   beatId?: string,
   metadata?: { title?: string; producer?: string; existingItemId?: string }
 ): Promise<StorageAssetResult> {
-  const targetCategory: UploadCategory = category === 'video' ? 'audio' : category;
+  const targetCategory: 'audio' | 'stems' | 'artwork' = category === 'video' ? 'audio' : category;
 
-  // 1. Client-side pre-validation (Rejects WAV, validates format)
-  const validation = validateIAFile(file.name, targetCategory, file.type);
-  if (!validation.valid) {
-    throw new Error(validation.error || 'File validation failed.');
-  }
-
-  const cleanBeatId = beatId ? beatId.replace(/[^a-zA-Z0-9_-]/g, '') : `beat_${Date.now()}`;
-  const sanitizedName = validation.sanitizedFileName;
-  const mimeType = validation.mimeType;
-
-  // 2. Request ephemeral IAS3 Presigned URL from server (Metadata only, < 1KB)
-  const presignPayload = {
-    beatId: cleanBeatId,
-    filename: sanitizedName,
-    category: targetCategory,
-    mimeType,
-    fileSize: file.size,
-    title: metadata?.title || 'Instrumental Beat',
-    producer: metadata?.producer || 'KRAEZELV',
-    existingItemId: metadata?.existingItemId,
-  };
-
-  const presignHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (auth.currentUser) {
-    try {
-      const idToken = await auth.currentUser.getIdToken();
-      if (idToken) {
-        presignHeaders['Authorization'] = `Bearer ${idToken}`;
-      }
-    } catch {
-      // Non-blocking fallback
-    }
-  }
-
-  const presignUrl = `/api/storage/internet-archive/presign?category=${encodeURIComponent(targetCategory)}&beatId=${encodeURIComponent(cleanBeatId)}&filename=${encodeURIComponent(sanitizedName)}`;
-
-  let presignRes: Response;
-  try {
-    presignRes = await fetch(presignUrl, {
-      method: 'POST',
-      headers: presignHeaders,
-      body: JSON.stringify(presignPayload),
-    });
-  } catch (err: unknown) {
-    const error = err as Error;
-    throw new Error(`Failed to reach upload presign service: ${error?.message || 'Network error'}`);
-  }
-
-  const presignJson = await presignRes.json().catch(() => null);
-
-  if (!presignRes.ok || !presignJson || presignJson.success === false) {
-    const presignErrMsg =
-      presignJson?.message ||
-      presignJson?.error ||
-      `Presign request failed with status ${presignRes.status}`;
-    throw new Error(`Upload authorization failed: ${presignErrMsg}`);
-  }
-
-  const { uploadUrl, durableUrl, archivePath, itemId, headers: signedHeaders } = presignJson;
-
-  if (!uploadUrl || !durableUrl || !itemId) {
-    throw new Error('Invalid presign response from storage service.');
-  }
-
-  // 3. Direct Browser-to-Internet-Archive S3 PUT Upload (Bypasses Vercel 4.5MB limit)
-  try {
-    const directUploadRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: signedHeaders || { 'Content-Type': mimeType },
-      body: file,
-    });
-
-    if (!directUploadRes.ok) {
-      const errorText = await directUploadRes.text().catch(() => '');
-      throw new Error(
-        `Internet Archive storage upload failed (HTTP ${directUploadRes.status}): ${errorText || 'Direct storage PUT was rejected'}`
-      );
+  if (typeof fileOrUrl === 'string') {
+    const validation = validateValleyFileUrl(fileOrUrl, targetCategory);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid URL supplied.');
     }
 
+    const cleanUrl = validation.sanitizedUrl || fileOrUrl;
     return {
-      assetId: `ia_${targetCategory}_${itemId}`,
-      cdnUrl: durableUrl,
-      archiveUrl: archivePath,
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType,
-      itemId,
+      assetId: `vf_${targetCategory}_${Date.now()}`,
+      cdnUrl: cleanUrl,
+      archiveUrl: cleanUrl,
+      fileName: cleanUrl.split('/').pop() || `${targetCategory}_asset`,
+      fileSize: 0,
+      mimeType: targetCategory === 'audio' ? 'audio/mpeg' : targetCategory === 'artwork' ? 'image/jpeg' : 'application/zip',
       storage: {
-        provider: 'internet_archive',
-        itemId,
-        fileUrl: durableUrl,
-        category: targetCategory,
-        fileName: sanitizedName,
-        size: file.size,
-        mimeType,
+        provider: 'valleyfile',
+        durableUrl: cleanUrl,
+        fileType: validation.fileType === 'artwork' ? undefined : validation.fileType,
+        fileUrl: cleanUrl,
+        audioUrl: targetCategory === 'audio' ? cleanUrl : undefined,
+        artworkUrl: targetCategory === 'artwork' ? cleanUrl : undefined,
+        stemsUrl: targetCategory === 'stems' ? cleanUrl : undefined,
         uploadedAt: new Date().toISOString(),
       },
     };
-  } catch (err: unknown) {
-    const error = err as Error;
-    console.error('[STORAGE_ENGINE] Direct Internet Archive upload error:', error?.message || error);
-    throw error;
   }
+
+  // If a File object is passed, check format
+  validateAudioFile(fileOrUrl);
+  throw new Error(
+    'Direct automated upload is not active. Please upload your file directly to ValleyFile and paste the direct public link.'
+  );
 }
 
-/**
- * Backward compatibility alias for existing component call sites
- */
 export const uploadToR2AndArchive = uploadToStorage;

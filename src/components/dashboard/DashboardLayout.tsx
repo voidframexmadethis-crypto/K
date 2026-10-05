@@ -40,12 +40,18 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     <div className="flex min-h-screen bg-black pt-20">
       {/* Sidebar */}
       <aside className="w-64 border-r border-white/10 hidden md:flex flex-col sticky top-20 h-[calc(100vh-80px)]">
-        <div className="p-6">
+        <div className="p-6 space-y-2">
            <Link 
              to="/dashboard/upload"
-             className="w-full py-4 bg-white text-black flex items-center justify-center gap-2 font-bold uppercase tracking-widest text-[10px] hover:bg-neutral-200 transition-all"
+             className="w-full py-3.5 bg-white text-black flex items-center justify-center gap-2 font-bold uppercase tracking-widest text-[9px] hover:bg-neutral-200 transition-all rounded-xs"
            >
-             <Plus size={16} /> Upload Beat
+             <Plus size={14} /> Upload Beat
+           </Link>
+           <Link 
+             to="/dashboard/upload-pack"
+             className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center gap-2 font-bold uppercase tracking-widest text-[9px] transition-all rounded-xs"
+           >
+             <Plus size={14} /> Upload Beat Pack
            </Link>
         </div>
 

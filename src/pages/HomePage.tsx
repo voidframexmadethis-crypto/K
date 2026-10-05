@@ -12,6 +12,7 @@ import { MerchSection } from '../components/home/MerchSection';
 import { ProducerFeature } from '../components/ProducerFeature';
 import { Music, ArrowRight, Download, Sparkles, Layers, Upload } from 'lucide-react';
 import { useBeatCatalogStore } from '../store/useBeatCatalogStore';
+import { useBeatPackStore } from '../store/useBeatPackStore';
 import { AdOverlay } from '../components/home/AdOverlay';
 import { FreeDownloadModal } from '../components/beats/FreeDownloadModal';
 
@@ -38,8 +39,7 @@ export const HomePage = () => {
     );
   }
 
-  // Empty packs by default for clean store
-  const packs: any[] = [];
+  const { packs } = useBeatPackStore();
 
   return (
     <main className="bg-black overflow-hidden">
@@ -68,8 +68,30 @@ export const HomePage = () => {
               </h2>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-16 items-center">
-              {/* Render packs when available */}
+            <div className="grid lg:grid-cols-2 gap-8 items-center">
+              {packs.map((pack) => {
+                const downloadUrl = pack.storage?.durableUrl || pack.zipUrl || pack.downloadUrl;
+                return (
+                  <div key={pack.id} className="p-8 bg-black/60 border border-white/10 flex flex-col md:flex-row items-center gap-6 group hover:border-purple-500/40 transition-all">
+                    <img src={pack.artworkUrl} alt={pack.title} className="w-24 h-24 object-cover bg-neutral-900 border border-white/10 shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2 text-center md:text-left">
+                      <h3 className="text-xl font-black uppercase text-white tracking-tight truncate">{pack.title}</h3>
+                      <p className="text-xs text-white/50 line-clamp-2">{pack.description}</p>
+                      <div className="text-[10px] font-mono text-emerald-400 font-bold">${pack.price} · ValleyFile ZIP Attached</div>
+                    </div>
+                    {downloadUrl ? (
+                      <a 
+                        href={downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-6 py-3 bg-white hover:bg-purple-600 text-black hover:text-white font-black uppercase tracking-widest text-[9px] transition-colors shrink-0 flex items-center gap-2"
+                      >
+                        <Download size={14} /> Download ZIP
+                      </a>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

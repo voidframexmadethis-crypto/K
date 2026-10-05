@@ -16,6 +16,7 @@ import { VideosPage } from './pages/VideosPage';
 import { FavoritesPage } from './pages/FavoritesPage';
 import { CartPage } from './pages/CartPage';
 import { BeatUploader } from './components/dashboard/BeatUploader';
+import { BeatPackUploader } from './components/dashboard/BeatPackUploader';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { SalesDashboard } from './components/dashboard/SalesDashboard';
 import { CatalogDashboard } from './components/dashboard/CatalogDashboard';
@@ -202,6 +203,7 @@ function MainAppContent() {
               <Routes>
                 <Route path="/" element={<DashboardOverview />} />
                 <Route path="/upload" element={<BeatUploader />} />
+                <Route path="/upload-pack" element={<BeatPackUploader />} />
                 <Route path="/music" element={<CatalogDashboard />} />
                 <Route path="/remove-beats" element={<RemoveBeatsFromPlayer />} />
                 <Route path="/sales" element={<SalesDashboard />} />

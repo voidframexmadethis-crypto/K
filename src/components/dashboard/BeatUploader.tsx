@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
-import { uploadToStorage, validateAudioFile } from '../../lib/storageEngine';
+import { validateValleyFileUrl, createValleyFileStorageMetadata, validateAudioFile } from '../../lib/storageEngine';
 import { BEEHIIV_CONFIG } from '../../config/beehiiv';
 import { Beat } from '../../types';
 import { 
@@ -68,13 +68,12 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     stemZipFileName: 'Valkyrie_WAV_Stems_Bundle.zip',
     lyrics: '[Intro]\nYeah, KRAEZELV on the track...\n[Chorus]\nSliding through the dark...',
 
-    // 2. Audio & Watermarking
-    audioUrl: editingBeat?.audioUrl || '',
-    artworkUrl: editingBeat?.artworkUrl || '',
+    // 2. Audio & Watermarking (ValleyFile Direct URL Integration)
+    audioUrl: editingBeat?.audioUrl || editingBeat?.storage?.durableUrl || '',
+    artworkUrl: editingBeat?.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80',
     stemsUrl: editingBeat?.stemsUrl || '',
-    archiveVaultUrl: editingBeat?.storage?.audioUrl || editingBeat?.audioUrl || '',
-    archiveItemId: editingBeat?.storage?.itemId || '',
-    isPreTaggedUpload: false,
+    taggedAudioUrl: editingBeat?.taggedAudioUrl || '',
+    isPreTaggedUpload: Boolean(editingBeat?.taggedAudioUrl),
     isWatermarkEnabled: true,
     globalVoicetagProfile: 'KRAEZELV_Official_Signature.wav',
     voicetagVolumeDb: -3,
@@ -213,9 +212,10 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
   const iframeCode = `<iframe src="${currentOrigin}/embed/beat/${formData.title.toLowerCase() || 'track'}?theme=dark" width="${formData.embedWidth}%" height="${formData.embedHeight}" frameborder="0" allow="autoplay"></iframe>`;
 
   // Validation Checks for Readiness Checklist
-  const isAudioReady = !!formData.audioFileName;
-  const isArtworkReady = !!formData.coverArtName;
-  const isMetadataReady = !!(formData.title && formData.bpm && formData.key && formData.primaryGenre);
+  const audioValidation = validateValleyFileUrl(formData.audioUrl, 'audio');
+  const isAudioReady = Boolean(formData.audioUrl && audioValidation.valid);
+  const isArtworkReady = Boolean(formData.artworkUrl);
+  const isMetadataReady = Boolean(formData.title && formData.bpm && formData.key && formData.primaryGenre);
   const isPricingReady = formData.isFreeDownload || (formData.pricingMode === 'direct' ? parseFloat(formData.directPrice) > 0 : (parseFloat(formData.mp3LeasePrice) > 0 || parseFloat(formData.wavLeasePrice) > 0));
   const isStoreReady = true;
 
@@ -248,7 +248,26 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     const idempotencyKey = currentSubmissionIdRef.current;
 
     try {
-      // 4. IDEMPOTENCY CHECK - Check if beat with this idempotency key already exists in catalog
+      // 4. Validate ValleyFile Audio URL
+      const audioCheck = validateValleyFileUrl(formData.audioUrl, 'audio');
+      if (!audioCheck.valid) {
+        setSubmissionError(audioCheck.error || 'Please provide a valid ValleyFile Direct File URL for the master audio.');
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
+      if (formData.stemsUrl) {
+        const stemsCheck = validateValleyFileUrl(formData.stemsUrl, 'stems');
+        if (!stemsCheck.valid) {
+          setSubmissionError(stemsCheck.error || 'Invalid ValleyFile Stems URL.');
+          setIsSubmitting(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
+      // 5. IDEMPOTENCY CHECK - Check if beat with this idempotency key already exists in catalog
       const existingInCatalog = findBeatByIdempotencyKey(idempotencyKey);
       if (existingInCatalog) {
         console.log('[DUPLICATE_PREVENTION] Idempotency hit: Beat already exists in store.', existingInCatalog.id);
@@ -258,7 +277,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         return;
       }
 
-      // 5. Handle Editing Existing Beat vs Creating New Beat
+      // 6. Handle Editing Existing Beat vs Creating New Beat
       const editingId = editingBeat?.id || (formData as any).editingBeatId;
       if (editingId) {
         await updateBeat(editingId, {
@@ -270,10 +289,23 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
           tags: formData.tags || ['NEW'],
           moods: formData.moods || ['Dark'],
           instruments: formData.instruments || [],
+          audioUrl: formData.audioUrl.trim(),
+          taggedAudioUrl: formData.taggedAudioUrl ? formData.taggedAudioUrl.trim() : undefined,
+          stemsUrl: formData.stemsUrl ? formData.stemsUrl.trim() : '',
+          artworkUrl: formData.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80',
           isFree: formData.isFreeDownload,
           freeDownloadEnabled: formData.isFreeDownload,
           freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
           beehiivFormUrl: formData.beehiivFormUrl || '',
+          storage: {
+            provider: 'valleyfile',
+            durableUrl: formData.audioUrl.trim(),
+            fileUrl: formData.audioUrl.trim(),
+            audioUrl: formData.audioUrl.trim(),
+            artworkUrl: formData.artworkUrl,
+            stemsUrl: formData.stemsUrl ? formData.stemsUrl.trim() : '',
+            uploadedAt: new Date().toISOString(),
+          },
           licenses: formData.pricingMode === 'direct' ? {
             basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
             premium: { price: parseFloat(formData.directPrice) || 49.99, enabled: false },
@@ -291,23 +323,12 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         return;
       }
 
-      // Validate audioUrl before creating beat
-      if (!formData.audioUrl) {
-        setSubmissionError('Please select and upload a valid MP3 or M4A audio file before publishing.');
-        setIsSubmitting(false);
-        isSubmittingRef.current = false;
-        return;
-      }
-
-      if (formData.audioUrl.startsWith('data:') || formData.audioUrl.startsWith('blob:')) {
-        setSubmissionError('Temporary or base64 audio URLs are not permitted. Please re-upload the master audio file.');
-        setIsSubmitting(false);
-        isSubmittingRef.current = false;
-        return;
-      }
-
-      // 6. Create NEW Beat Record
+      // 7. Create NEW Beat Record with ValleyFile Storage Metadata
       const newBeatId = activeBeatIdRef.current;
+      const cleanAudioUrl = formData.audioUrl.trim();
+      const cleanArtworkUrl = formData.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80';
+      const cleanStemsUrl = formData.stemsUrl ? formData.stemsUrl.trim() : '';
+
       const newBeat: Beat = {
         id: newBeatId,
         idempotencyKey,
@@ -323,9 +344,10 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         isPrivate: !formData.isPublic,
         isBootleg: false,
         instruments: formData.instruments || [],
-        audioUrl: formData.audioUrl,
-        artworkUrl: formData.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80',
-        stemsUrl: formData.stemsUrl || '',
+        audioUrl: cleanAudioUrl,
+        taggedAudioUrl: formData.taggedAudioUrl ? formData.taggedAudioUrl.trim() : undefined,
+        artworkUrl: cleanArtworkUrl,
+        stemsUrl: cleanStemsUrl,
         isFree: formData.isFreeDownload,
         freeDownloadEnabled: formData.isFreeDownload,
         freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
@@ -344,11 +366,12 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
           exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
         },
         storage: {
-          provider: 'internet_archive',
-          itemId: formData.archiveItemId || `kraezelvbeatz-${newBeatId.toLowerCase().replace(/[^a-z0-9_-]/g, '')}`,
-          audioUrl: formData.audioUrl,
-          artworkUrl: formData.artworkUrl,
-          stemsUrl: formData.stemsUrl || '',
+          provider: 'valleyfile',
+          durableUrl: cleanAudioUrl,
+          fileUrl: cleanAudioUrl,
+          audioUrl: cleanAudioUrl,
+          artworkUrl: cleanArtworkUrl,
+          stemsUrl: cleanStemsUrl,
           uploadedAt: new Date().toISOString(),
         },
         createdAt: new Date().toISOString(),
@@ -363,7 +386,6 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     } catch (err: any) {
       console.error('[DUPLICATE_PREVENTION] Upload Error:', err);
       setSubmissionError(err?.message || 'Publish operation failed. Please try again.');
-      // On failure: release lock so user can retry safely
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
@@ -386,8 +408,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
       coverArtName: 'Default Cover.jpg',
       stemsUrl: '',
       stemZipFileName: '',
-      archiveVaultUrl: '',
-      archiveItemId: ''
+      taggedAudioUrl: ''
     }));
     setActiveSection(1);
   };
@@ -487,9 +508,21 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <Music size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Audio Uploads</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Audio Hosting — ValleyFile</h3>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Internet Archive Vault Synced</span>
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">ValleyFile Direct Link Synced</span>
+            </div>
+
+            <div className="p-4 bg-purple-950/20 border border-purple-500/20 rounded-sm space-y-2">
+              <div className="flex items-center gap-2 text-xs font-black uppercase text-purple-300">
+                <Sparkles size={14} /> ValleyFile Direct URL Instructions
+              </div>
+              <p className="text-[11px] text-white/70 leading-relaxed font-medium">
+                1. Upload your master MP3 or M4A manually to <span className="text-white font-bold">ValleyFile</span>.<br />
+                2. Copy the direct public ValleyFile link.<br />
+                3. Paste that link below into the <span className="text-white font-bold">ValleyFile Direct File URL</span> field.<br />
+                <span className="text-red-400 font-bold">Note: WAV format is permanently prohibited. Only high-resolution MP3 and M4A master files are supported.</span>
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -497,52 +530,125 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
               <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-4 relative group hover:border-purple-500/40 transition-all">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Untagged Master</span>
-                    <h4 className="text-lg font-black text-white uppercase">MP3 / M4A Master</h4>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Untagged Master *</span>
+                    <h4 className="text-lg font-black text-white uppercase">VALLEYFILE DIRECT FILE URL</h4>
                   </div>
                   <FileAudio size={24} className="text-white/40" />
                 </div>
 
-                <p className="text-[10px] text-white/40 uppercase font-medium">Clean master file used for lease delivery.</p>
+                <p className="text-[10px] text-white/40 uppercase font-medium">
+                  Direct public link used for audio playback & lease download delivery.
+                </p>
 
-                <div className="relative h-28 border-2 border-dashed border-white/20 hover:border-white transition-all flex flex-col items-center justify-center p-4 text-center">
-                  <span className="text-xs font-black uppercase tracking-wider text-white truncate max-w-full">
-                    {formData.audioFileName || 'No File Selected'}
-                  </span>
-                  <span className="text-[9px] font-mono text-emerald-400 mt-1 uppercase">
-                    {isUploadingAudio ? '⏳ Uploading to Internet Archive...' : formData.audioUrl ? '✓ Internet Archive Vault Active' : 'Tap To Select MP3 or M4A (WAV Prohibited)'}
-                  </span>
-                  <input 
-                    type="file" 
-                    className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                    accept=".mp3,.m4a,audio/mpeg,audio/mp4"
-                    disabled={isUploadingAudio}
-                    onChange={async (e) => {
-                      if (e.target.files?.[0]) {
-                        const file = e.target.files[0];
-                        try {
-                          validateAudioFile(file);
-                          setIsUploadingAudio(true);
-                          const res = await uploadToStorage(file, 'audio', activeBeatIdRef.current, {
-                            title: formData.title,
-                            producer: formData.producerId,
-                            existingItemId: formData.archiveItemId,
-                          });
-                          setFormData((prev) => ({ 
-                            ...prev, 
-                            audioFileName: file.name, 
-                            audioUrl: res.cdnUrl,
-                            archiveVaultUrl: res.cdnUrl,
-                            archiveItemId: res.itemId || prev.archiveItemId
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
+                      VALLEYFILE DIRECT FILE URL *
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input 
+                        type="url"
+                        value={formData.audioUrl}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            audioUrl: val,
+                            audioFileName: val ? (val.split('/').pop() || 'master_audio.mp3') : '',
                           }));
-                        } catch (err: any) {
-                          alert(err?.message || 'Audio upload failed');
-                        } finally {
-                          setIsUploadingAudio(false);
-                        }
-                      }
-                    }}
-                  />
+                        }}
+                        placeholder="[ Paste ValleyFile URL here ]"
+                        className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const check = validateValleyFileUrl(formData.audioUrl, 'audio');
+                          if (check.valid) {
+                            alert(`✓ ValleyFile URL validated successfully!\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: ValleyFile`);
+                          } else {
+                            alert(`Validation Error: ${check.error}`);
+                          }
+                        }}
+                        className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
+                      >
+                        Validate URL
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Validation State Display */}
+                  <div className="text-[10px] font-mono">
+                    {formData.audioUrl ? (
+                      audioValidation.valid ? (
+                        <div className="space-y-3 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 font-bold uppercase text-emerald-400">
+                              <CheckCircle size={14} /> ✓ ValleyFile URL saved
+                            </span>
+                            <span className="text-[9px] uppercase px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-xs">
+                              Active
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
+                            <div>File type: <span className="text-white font-bold">{audioValidation.fileType?.toUpperCase() || 'MP3'}</span></div>
+                            <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const audio = new Audio(formData.audioUrl);
+                                audio.play().catch(() => alert('Could not play stream from ValleyFile URL. Please verify link is publicly accessible.'));
+                              }}
+                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black font-black uppercase text-[8px] tracking-wider rounded-xs transition-colors"
+                            >
+                              ▶ Test Stream
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(formData.audioUrl);
+                                alert('ValleyFile URL copied to clipboard');
+                              }}
+                              className="px-2.5 py-1 bg-white/10 hover:bg-white text-white hover:text-black font-black uppercase text-[8px] tracking-wider rounded-xs transition-colors"
+                            >
+                              Copy URL
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newUrl = prompt('Enter new ValleyFile Direct File URL:', formData.audioUrl);
+                                if (newUrl !== null) {
+                                  const trimmed = newUrl.trim();
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    audioUrl: trimmed,
+                                    audioFileName: trimmed ? (trimmed.split('/').pop() || 'master_audio.mp3') : '',
+                                  }));
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-white/10 hover:bg-purple-600 text-white font-black uppercase text-[8px] tracking-wider rounded-xs transition-colors"
+                            >
+                              Replace URL
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-sm flex items-center gap-2 font-bold uppercase">
+                          <AlertTriangle size={14} /> {audioValidation.error}
+                        </div>
+                      )
+                    ) : (
+                      <span className="text-white/40 uppercase">
+                        ○ Paste your ValleyFile MP3 or M4A direct URL above
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -551,45 +657,31 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Pre-Tagged Option</span>
-                    <h4 className="text-lg font-black text-white uppercase">DAW Watermarked MP3</h4>
+                    <h4 className="text-lg font-black text-white uppercase">DAW Watermarked Link</h4>
                   </div>
                   <Music size={24} className="text-white/40" />
                 </div>
 
-                <p className="text-[10px] text-white/40 uppercase font-medium">Upload audio pre-stamped with your voice tag.</p>
+                <p className="text-[10px] text-white/40 uppercase font-medium">
+                  Direct ValleyFile link to audio pre-stamped with your voice tag (optional).
+                </p>
 
-                <div className="relative h-28 border-2 border-dashed border-white/20 hover:border-white transition-all flex flex-col items-center justify-center p-4 text-center">
-                  <span className="text-xs font-black uppercase tracking-wider text-white/70">
-                    {formData.isPreTaggedUpload ? '✓ DAW Tagged File Uploaded' : 'Drag Pre-Tagged Audio Here'}
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
+                      ValleyFile Watermarked URL (Optional)
+                    </label>
+                    <input 
+                      type="url" 
+                      value={formData.taggedAudioUrl}
+                      onChange={(e) => setFormData({ ...formData, taggedAudioUrl: e.target.value, isPreTaggedUpload: Boolean(e.target.value) })}
+                      placeholder="https://valleyfile.com/download/tagged-preview.mp3"
+                      className="w-full bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                    />
+                  </div>
+                  <span className="text-[9px] font-mono text-white/40 uppercase block">
+                    {formData.taggedAudioUrl ? '✓ Watermarked Preview URL Active' : 'Leave empty to auto-use untagged master stream'}
                   </span>
-                  <span className="text-[9px] font-mono text-white/40 mt-1 uppercase">Optional</span>
-                  <input 
-                    type="file" 
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    accept=".mp3,.m4a,audio/mpeg,audio/mp4"
-                    onChange={async (e) => {
-                      if (e.target.files?.[0]) {
-                        const file = e.target.files[0];
-                        try {
-                          validateAudioFile(file);
-                          const res = await uploadToStorage(file, 'audio', activeBeatIdRef.current, {
-                            title: formData.title,
-                            producer: formData.producerId,
-                            existingItemId: formData.archiveItemId,
-                          });
-                          setFormData((prev) => ({ 
-                            ...prev, 
-                            isPreTaggedUpload: true,
-                            audioUrl: res.cdnUrl,
-                            archiveVaultUrl: res.cdnUrl,
-                            archiveItemId: res.itemId || prev.archiveItemId
-                          }));
-                        } catch (err: any) {
-                          alert(err?.message || 'Audio upload failed');
-                        }
-                      }
-                    }}
-                  />
                 </div>
               </div>
             </div>
@@ -602,7 +694,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <Archive size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">3. Stems — Optional</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">3. Stems (ValleyFile ZIP) — Optional</h3>
               </div>
               <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Multi-Track Archive</span>
             </div>
@@ -611,47 +703,81 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
                   <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Trackout ZIP Archive</span>
-                  <h4 className="text-lg font-black text-white uppercase">24-Bit Trackout Stems</h4>
+                  <h4 className="text-lg font-black text-white uppercase">VALLEYFILE ZIP FILE URL</h4>
                 </div>
                 <Archive size={24} className="text-white/40" />
               </div>
 
-              <div className="relative h-28 border-2 border-dashed border-white/20 hover:border-white transition-all flex flex-col items-center justify-center p-4 text-center">
-                <span className="text-xs font-black uppercase tracking-wider text-white truncate max-w-full">
-                  {formData.stemZipFileName}
-                </span>
-                <span className="text-[9px] font-mono text-emerald-400 mt-1 uppercase">
-                  {isUploadingStems ? '⏳ Uploading to Internet Archive...' : formData.stemsUrl ? '✓ Internet Archive Stems Vault Active' : 'Select .ZIP File'}
-                </span>
-                <input 
-                  type="file" 
-                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                  accept=".zip,.rar,.7z"
-                  disabled={isUploadingStems}
-                  onChange={async (e) => {
-                    if (e.target.files?.[0]) {
-                      const file = e.target.files[0];
-                      setIsUploadingStems(true);
-                      try {
-                        const res = await uploadToStorage(file, 'stems', activeBeatIdRef.current, {
-                          title: formData.title,
-                          producer: formData.producerId,
-                          existingItemId: formData.archiveItemId,
-                        });
-                        setFormData((prev) => ({ 
-                          ...prev, 
-                          stemZipFileName: file.name, 
-                          stemsUrl: res.cdnUrl,
-                          archiveItemId: res.itemId || prev.archiveItemId
+              <p className="text-[10px] text-white/40 uppercase font-medium">
+                Upload your multi-track stem bundle (.ZIP) manually to ValleyFile and paste the public direct link below.
+              </p>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
+                    VALLEYFILE ZIP FILE URL
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input 
+                      type="url"
+                      value={formData.stemsUrl}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          stemsUrl: val,
+                          stemZipFileName: val ? (val.split('/').pop() || 'stems.zip') : '',
                         }));
-                      } catch (err: any) {
-                        alert(err?.message || 'Stems upload failed');
-                      } finally {
-                        setIsUploadingStems(false);
-                      }
-                    }
-                  }}
-                />
+                      }}
+                      placeholder="[ Paste ValleyFile ZIP URL here ]"
+                      className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!formData.stemsUrl) {
+                          alert('Please enter a ValleyFile ZIP URL first.');
+                          return;
+                        }
+                        const check = validateValleyFileUrl(formData.stemsUrl, 'stems');
+                        if (check.valid) {
+                          alert(`✓ ValleyFile ZIP URL saved\nFile type: ZIP\nStorage provider: ValleyFile`);
+                        } else {
+                          alert(`Validation Error: ${check.error}`);
+                        }
+                      }}
+                      className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
+                    >
+                      Validate URL
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-[10px] font-mono">
+                  {formData.stemsUrl ? (
+                    (() => {
+                      const stemsCheck = validateValleyFileUrl(formData.stemsUrl, 'stems');
+                      return stemsCheck.valid ? (
+                        <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
+                          <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
+                            <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ ValleyFile ZIP URL saved</span>
+                            <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Attached</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
+                            <div>File type: <span className="text-white font-bold">ZIP</span></div>
+                            <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-sm flex items-center gap-1.5 font-bold uppercase">
+                          <AlertTriangle size={13} /> {stemsCheck.error}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <span className="text-white/40 uppercase">Optional for Unlimited & Exclusive license tiers</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -672,65 +798,49 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
               <div className="md:col-span-4 flex justify-center">
                 <div className="w-48 h-48 bg-neutral-900 border border-white/15 rounded-sm overflow-hidden relative group shadow-2xl">
                   <img 
-                    src={formData.artworkUrl || ''} 
+                    src={formData.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80'} 
                     alt="Artwork Preview" 
                     className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                   />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4 text-center">
-                    <span className="text-[9px] font-black uppercase text-white tracking-widest">Replace Art</span>
+                    <span className="text-[9px] font-black uppercase text-white tracking-widest">Artwork Preview</span>
                   </div>
                 </div>
               </div>
 
               <div className="md:col-span-8 space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-xl font-black uppercase text-white">{formData.coverArtName}</h4>
+                  <h4 className="text-xl font-black uppercase text-white">Cover Image URL</h4>
                   <p className="text-xs text-white/40 uppercase tracking-wider">
-                    Required ratio: 1:1 Square. Auto-optimized to WebP for high-speed mobile loading.
+                    Paste a ValleyFile image link, Unsplash link, or custom image URL (JPG, PNG, WEBP).
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-4 pt-2">
-                  <label className="px-6 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-neutral-200 transition-colors">
-                    {isUploadingArtwork ? 'Uploading to Internet Archive...' : 'Upload New Artwork'}
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*"
-                      disabled={isUploadingArtwork}
-                      onChange={async (e) => {
-                        if (e.target.files?.[0]) {
-                          const file = e.target.files[0];
-                          setIsUploadingArtwork(true);
-                          try {
-                            const res = await uploadToStorage(file, 'artwork', activeBeatIdRef.current, {
-                              title: formData.title,
-                              producer: formData.producerId,
-                              existingItemId: formData.archiveItemId,
-                            });
-                            setFormData((prev) => ({ 
-                              ...prev, 
-                              coverArtName: file.name, 
-                              artworkUrl: res.cdnUrl,
-                              archiveItemId: res.itemId || prev.archiveItemId
-                            }));
-                          } catch (err: any) {
-                            alert(err?.message || 'Artwork upload failed');
-                          } finally {
-                            setIsUploadingArtwork(false);
-                          }
-                        }
-                      }}
-                    />
-                  </label>
-                  {formData.artworkUrl && (
-                    <button 
-                      onClick={() => setFormData({ ...formData, artworkUrl: '', coverArtName: 'Default Cover.jpg' })}
-                      className="px-6 py-3 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors"
-                    >
-                      Reset Cover
-                    </button>
-                  )}
+                <div className="space-y-2">
+                  <input 
+                    type="url"
+                    value={formData.artworkUrl}
+                    onChange={(e) => setFormData({ ...formData, artworkUrl: e.target.value })}
+                    placeholder="https://valleyfile.com/download/artwork.jpg or image URL"
+                    className="w-full bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button 
+                    type="button"
+                    onClick={() => setFormData({ ...formData, artworkUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80', coverArtName: 'Studio_Console_Cover.jpg' })}
+                    className="px-4 py-2 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors"
+                  >
+                    Use Dark Studio Cover
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setFormData({ ...formData, artworkUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1200&auto=format&fit=crop&q=80', coverArtName: 'Synthesizer_Cover.jpg' })}
+                    className="px-4 py-2 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors"
+                  >
+                    Use Neon Synth Cover
+                  </button>
                 </div>
               </div>
             </div>
@@ -1329,7 +1439,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="space-y-1">
               <h4 className="text-xl font-black uppercase text-white">Publish Live To Catalog</h4>
               <p className="text-xs text-white/40 uppercase tracking-wider">
-                Pushes track live to Cloudflare Pages & Internet Archive Vault.
+                Pushes track live to storefront catalog with ValleyFile audio streaming.
               </p>
             </div>
 

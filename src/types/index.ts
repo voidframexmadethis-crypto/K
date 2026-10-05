@@ -67,19 +67,24 @@ export interface Beat {
   storage?: BeatStorageMetadata;
 }
 
+export type UploadCategory = 'audio' | 'artwork' | 'stems';
+
 export interface BeatStorageMetadata {
-  provider: 'internet_archive';
-  itemId: string;
+  provider: 'valleyfile' | 'internet_archive' | 'custom';
+  durableUrl: string;
+  fileType?: 'mp3' | 'm4a' | 'zip';
+  itemId?: string;
+  fileUrl?: string;
   audioUrl?: string;
   artworkUrl?: string;
   stemsUrl?: string;
   uploadedAt: string;
   files?: {
     category: 'audio' | 'artwork' | 'stems';
-    fileName: string;
+    fileName?: string;
     durableUrl: string;
-    size: number;
-    mimeType: string;
+    size?: number;
+    mimeType?: string;
   }[];
 }
 
@@ -127,8 +132,15 @@ export interface SoundKit {
   price: number;
   artworkUrl: string;
   audioDemoUrl?: string;
+  downloadUrl?: string;
   itemCount: number;
   fileSize: string;
+  storage?: {
+    provider: 'valleyfile';
+    durableUrl: string;
+    fileType: 'zip';
+    uploadedAt?: string;
+  };
 }
 
 export interface BeatPack {
@@ -138,6 +150,14 @@ export interface BeatPack {
   artworkUrl: string;
   beatIds: string[];
   price: number;
+  downloadUrl?: string;
+  zipUrl?: string;
+  storage?: {
+    provider: 'valleyfile';
+    durableUrl: string;
+    fileType: 'zip';
+    uploadedAt?: string;
+  };
   createdAt: string;
 }
 

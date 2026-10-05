@@ -3,14 +3,50 @@ import { Search, Filter, Plus, Edit3, Archive, Globe, Lock, CheckCircle2, AlertT
 import { Beat } from '../../types';
 import { cn } from '../../lib/utils';
 import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
+import { validateValleyFileUrl } from '../../lib/storageEngine';
 import { Link } from 'react-router-dom';
 
 export const CatalogDashboard = () => {
-  const { beats, removeBeat } = useBeatCatalogStore();
+  const { beats, removeBeat, updateBeat } = useBeatCatalogStore();
   const [search, setSearch] = useState('');
   const [selectedBeats, setSelectedBeats] = useState<string[]>([]);
   const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'Inventory' | 'Tools'>('Inventory');
+  const [editingBeatUrl, setEditingBeatUrl] = useState<Beat | null>(null);
+  const [newValleyUrl, setNewValleyUrl] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [isUpdatingUrl, setIsUpdatingUrl] = useState(false);
+
+  const handleSaveValleyUrl = async () => {
+    if (!editingBeatUrl) return;
+    const check = validateValleyFileUrl(newValleyUrl, 'audio');
+    if (!check.valid) {
+      setUrlError(check.error || 'Invalid ValleyFile URL');
+      return;
+    }
+
+    setIsUpdatingUrl(true);
+    setUrlError(null);
+    try {
+      await updateBeat(editingBeatUrl.id, {
+        audioUrl: newValleyUrl.trim(),
+        storage: {
+          ...editingBeatUrl.storage,
+          provider: 'valleyfile',
+          durableUrl: newValleyUrl.trim(),
+          fileUrl: newValleyUrl.trim(),
+          audioUrl: newValleyUrl.trim(),
+          uploadedAt: new Date().toISOString(),
+        }
+      });
+      setEditingBeatUrl(null);
+      setNewValleyUrl('');
+    } catch (err: any) {
+      setUrlError(err?.message || 'Failed to update ValleyFile URL in Firestore');
+    } finally {
+      setIsUpdatingUrl(false);
+    }
+  };
 
   const filteredBeats = beats.filter(b => 
     b.title.toLowerCase().includes(search.toLowerCase()) || 
@@ -146,7 +182,7 @@ export const CatalogDashboard = () => {
                            </td>
                            <td className="p-6 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                 <button onClick={() => alert('Edit feature coming soon. Use the Add Beat portal to update tracks.')} className="p-3 text-white/20 hover:text-white transition-colors"><Edit3 size={14} /></button>
+                                 <button onClick={() => { setEditingBeatUrl(beat); setNewValleyUrl(beat.audioUrl || beat.storage?.durableUrl || ''); setUrlError(null); }} title="Replace ValleyFile URL" className="p-3 text-white/40 hover:text-purple-400 transition-colors"><Edit3 size={14} /></button>
                                  <button onClick={() => { if(confirm(`Archive ${beat.title}?`)) removeBeat(beat.id); }} className="p-3 text-white/20 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                               </div>
                            </td>
@@ -325,6 +361,63 @@ export const CatalogDashboard = () => {
               >
                 Apply To {selectedBeats.length} Items
               </button>
+           </div>
+        </div>
+      )}
+
+      {/* Replace ValleyFile URL Modal */}
+      {editingBeatUrl && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/85 backdrop-blur-md">
+           <div className="w-full max-w-lg bg-neutral-950 border border-white/20 p-8 flex flex-col gap-6 shadow-2xl rounded-sm">
+              <div className="flex justify-between items-start border-b border-white/10 pb-4">
+                 <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Audio Storage Control</span>
+                    <h4 className="text-xl font-black uppercase text-white mt-1">Replace ValleyFile URL</h4>
+                    <p className="text-xs text-white/50 font-bold uppercase truncate max-w-xs">{editingBeatUrl.title}</p>
+                 </div>
+                 <button onClick={() => setEditingBeatUrl(null)} className="text-white/40 hover:text-white p-1"><X size={20} /></button>
+              </div>
+
+              <div className="space-y-3">
+                 <label className="text-[10px] font-black uppercase tracking-widest text-white/60 block">
+                    ValleyFile Direct File URL (MP3 / M4A)
+                 </label>
+                 <input 
+                   type="url"
+                   value={newValleyUrl}
+                   onChange={(e) => {
+                     setNewValleyUrl(e.target.value);
+                     setUrlError(null);
+                   }}
+                   placeholder="https://valleyfile.com/download/beat-master.mp3"
+                   className="w-full bg-white/5 border border-white/20 focus:border-purple-500 p-4 text-xs font-mono text-white outline-none transition-colors"
+                 />
+                 <p className="text-[9px] text-white/40 uppercase font-medium">
+                    Paste the direct public link to the audio master hosted on ValleyFile. WAV is strictly prohibited.
+                 </p>
+              </div>
+
+              {urlError && (
+                 <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono rounded-sm flex items-center gap-2">
+                    <AlertTriangle size={14} /> {urlError}
+                 </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                 <button
+                   onClick={handleSaveValleyUrl}
+                   disabled={isUpdatingUrl}
+                   className="flex-1 py-4 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
+                 >
+                   {isUpdatingUrl ? 'Updating in Firestore...' : 'Save & Update Audio URL'}
+                 </button>
+                 <button
+                   onClick={() => setEditingBeatUrl(null)}
+                   className="px-6 py-4 border border-white/20 text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-colors"
+                 >
+                   Cancel
+                 </button>
+              </div>
            </div>
         </div>
       )}
