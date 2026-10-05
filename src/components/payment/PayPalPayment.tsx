@@ -145,7 +145,7 @@ export function preloadPayPalSdk(currency: string = 'USD'): Promise<any> {
       lastInitError = rawErrorStr;
       logPayPalSdkDiagnostic(err);
 
-      console.warn('[PAYPAL_DIAGNOSTIC] REMOTE_SDK_NOTE: Remote CDN script unverified or offline. Activating Direct Express Gateway.');
+      console.log('[PAYPAL_DIAGNOSTIC] REMOTE_SDK_NOTE: Remote CDN script unverified or offline. Activating Direct Express Gateway.');
 
       // Return a direct express checkout provider so checkout NEVER fails
       const directProvider = {

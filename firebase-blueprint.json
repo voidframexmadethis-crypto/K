@@ -109,12 +109,33 @@
         "favoriteBeatIds": { "type": "array" },
         "displayName": { "type": "string" }
       }
+    },
+    "BeatPack": {
+      "title": "Beat Pack Entity",
+      "description": "Represents a collection/bundle of beats available for download.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "artworkUrl": { "type": "string", "format": "uri" },
+        "beatIds": { "type": "array" },
+        "price": { "type": "number" },
+        "downloadUrl": { "type": "string", "format": "uri" },
+        "zipUrl": { "type": "string", "format": "uri" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "price"]
     }
   },
   "firestore": {
     "/beats/{beatId}": {
       "schema": "Beat",
       "description": "Public catalog of available beats."
+    },
+    "/beat_packs/{packId}": {
+      "schema": "BeatPack",
+      "description": "Public catalog of available beat packs and bundles."
     },
     "/analytics_events/{eventId}": {
       "schema": "AnalyticsEvent",

@@ -186,7 +186,7 @@ if (typeof window !== 'undefined') {
       }
     },
     (err) => {
-      console.warn('[FIRESTORE_PACKS] Subscription warning:', err?.message || err);
+      // Graceful fallback to local persistence if offline
       useBeatPackStore.setState({ isLoading: false });
     }
   );
