@@ -5,11 +5,10 @@ import {
   executeIAUpload,
 } from '../../../src/lib/internetArchiveCore.ts';
 
-// Disable default body parser to allow raw binary audio/image/stems streaming on Vercel
+// Disable default body parser to allow raw binary streaming on Vercel
 export const config = {
   api: {
     bodyParser: false,
-    sizeLimit: '200mb',
   },
 };
 
@@ -56,7 +55,15 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const query = req.query || {};
+    let query = req.query || {};
+    if ((!query || Object.keys(query).length === 0) && req.url) {
+      try {
+        const urlObj = new URL(req.url, 'http://localhost');
+        query = Object.fromEntries(urlObj.searchParams.entries());
+      } catch {
+        // Fallback to empty query if URL parsing fails
+      }
+    }
     const headers = req.headers || {};
 
     const fileName =

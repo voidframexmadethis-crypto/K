@@ -45,13 +45,14 @@ export function validateAudioFile(file: File): void {
 }
 
 /**
- * Uploads media assets to Internet Archive via secure Cloudflare Pages Function.
- * The browser NEVER holds or receives the Internet Archive secret key.
- *
- * Path architecture on Internet Archive:
- * - https://archive.org/download/{itemId}/audio/{fileName}.mp3 (or .m4a)
- * - https://archive.org/download/{itemId}/artwork/{fileName}.{jpg|png|webp}
- * - https://archive.org/download/{itemId}/stems/{fileName}.zip
+ * Uploads media assets directly to Internet Archive using an ephemeral,
+ * server-generated S3 Presigned PUT URL.
+ * 
+ * Flow:
+ * 1. Browser sends lightweight metadata to /api/storage/internet-archive/presign (~1KB)
+ * 2. Vercel function signs the request using server-side IA credentials (never exposed to browser)
+ * 3. Browser directly streams the full file to https://s3.us.archive.org via HTTP PUT (bypasses 4.5MB Vercel limit)
+ * 4. Browser receives confirmation and returns the durable archive.org URL
  */
 export async function uploadToStorage(
   file: File,
@@ -71,66 +72,98 @@ export async function uploadToStorage(
   const sanitizedName = validation.sanitizedFileName;
   const mimeType = validation.mimeType;
 
-  // 2. Prepare request for Cloudflare Pages Function
-  const headers: Record<string, string> = {
-    'Content-Type': mimeType,
-    'x-category': targetCategory,
-    'x-beat-id': cleanBeatId,
-    'x-filename': sanitizedName,
-    'x-title': metadata?.title || 'Instrumental Beat',
-    'x-producer': metadata?.producer || 'KRAEZELV',
+  // 2. Request ephemeral IAS3 Presigned URL from server (Metadata only, < 1KB)
+  const presignPayload = {
+    beatId: cleanBeatId,
+    filename: sanitizedName,
+    category: targetCategory,
+    mimeType,
+    fileSize: file.size,
+    title: metadata?.title || 'Instrumental Beat',
+    producer: metadata?.producer || 'KRAEZELV',
+    existingItemId: metadata?.existingItemId,
   };
 
-  if (metadata?.existingItemId) {
-    headers['x-existing-item-id'] = metadata.existingItemId;
-  }
+  const presignHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
 
-  // Use short-lived cryptographically signed token if user is signed in
   if (auth.currentUser) {
     try {
       const idToken = await auth.currentUser.getIdToken();
       if (idToken) {
-        headers['Authorization'] = `Bearer ${idToken}`;
+        presignHeaders['Authorization'] = `Bearer ${idToken}`;
       }
     } catch {
-      // Non-blocking fallback for anonymous or local workflows
+      // Non-blocking fallback
     }
   }
 
-  const uploadEndpoint = `/api/storage/internet-archive/upload?category=${encodeURIComponent(targetCategory)}&beatId=${encodeURIComponent(cleanBeatId)}&filename=${encodeURIComponent(sanitizedName)}`;
-
+  let presignRes: Response;
   try {
-    const res = await fetch(uploadEndpoint, {
+    presignRes = await fetch('/api/storage/internet-archive/presign', {
       method: 'POST',
-      headers,
+      headers: presignHeaders,
+      body: JSON.stringify(presignPayload),
+    });
+  } catch (err: unknown) {
+    const error = err as Error;
+    throw new Error(`Failed to reach upload presign service: ${error?.message || 'Network error'}`);
+  }
+
+  const presignJson = await presignRes.json().catch(() => null);
+
+  if (!presignRes.ok || !presignJson || presignJson.success === false) {
+    const presignErrMsg =
+      presignJson?.message ||
+      presignJson?.error ||
+      `Presign request failed with status ${presignRes.status}`;
+    throw new Error(`Upload authorization failed: ${presignErrMsg}`);
+  }
+
+  const { uploadUrl, durableUrl, archivePath, itemId, headers: signedHeaders } = presignJson;
+
+  if (!uploadUrl || !durableUrl || !itemId) {
+    throw new Error('Invalid presign response from storage service.');
+  }
+
+  // 3. Direct Browser-to-Internet-Archive S3 PUT Upload (Bypasses Vercel 4.5MB limit)
+  try {
+    const directUploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: signedHeaders || { 'Content-Type': mimeType },
       body: file,
     });
 
-    const resJson = await res.json().catch(() => null);
-
-    if (!res.ok || !resJson || resJson.success === false) {
-      const errMsg =
-        resJson?.message ||
-        resJson?.error ||
-        `Storage upload failed with HTTP status ${res.status}`;
-      throw new Error(errMsg);
+    if (!directUploadRes.ok) {
+      const errorText = await directUploadRes.text().catch(() => '');
+      throw new Error(
+        `Internet Archive storage upload failed (HTTP ${directUploadRes.status}): ${errorText || 'Direct storage PUT was rejected'}`
+      );
     }
 
-    const iaResult = resJson as IAUploadResult;
-
     return {
-      assetId: `ia_${targetCategory}_${iaResult.itemId}`,
-      cdnUrl: iaResult.durableUrl,
-      archiveUrl: iaResult.archivePath,
+      assetId: `ia_${targetCategory}_${itemId}`,
+      cdnUrl: durableUrl,
+      archiveUrl: archivePath,
       fileName: file.name,
       fileSize: file.size,
       mimeType,
-      itemId: iaResult.itemId,
-      storage: iaResult.storage,
+      itemId,
+      storage: {
+        provider: 'internet_archive',
+        itemId,
+        fileUrl: durableUrl,
+        category: targetCategory,
+        fileName: sanitizedName,
+        size: file.size,
+        mimeType,
+        uploadedAt: new Date().toISOString(),
+      },
     };
   } catch (err: unknown) {
     const error = err as Error;
-    console.error('[STORAGE_ENGINE] Upload pipeline error:', error?.message || error);
+    console.error('[STORAGE_ENGINE] Direct Internet Archive upload error:', error?.message || error);
     throw error;
   }
 }
