@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useBeatPackStore } from '../../store/useBeatPackStore';
 import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
 import { validateStorageUrl, createPackStorageMetadata } from '../../lib/storageEngine';
-import { BeatPack } from '../../types';
+import { BeatPack, Beat } from '../../types';
 import { 
   Archive, CheckCircle, AlertTriangle, Layers, DollarSign, 
   Image as ImageIcon, Sparkles, Plus, Copy, Edit3, Trash2, Download, ExternalLink, Globe
@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils';
 
 export const BeatPackUploader = () => {
   const { packs, addPack, removePack, updatePack } = useBeatPackStore();
-  const { beats } = useBeatCatalogStore();
+  const { beats, addBeat, updateBeat: updateCatalogBeat, removeBeat: removeCatalogBeat } = useBeatCatalogStore();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -44,12 +44,15 @@ export const BeatPackUploader = () => {
     setIsSubmitting(true);
     try {
       const cleanZip = zipUrl.trim();
+      const packPrice = parseFloat(price) || 99.99;
+      const cleanArtwork = artworkUrl.trim() || 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1200&auto=format&fit=crop&q=80';
+
       const newPack: BeatPack = {
         id: `pack_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         title: title.trim(),
         description: description.trim(),
-        price: parseFloat(price) || 99.99,
-        artworkUrl: artworkUrl.trim(),
+        price: packPrice,
+        artworkUrl: cleanArtwork,
         beatIds: selectedBeatIds,
         downloadUrl: cleanZip,
         zipUrl: cleanZip,
@@ -62,13 +65,63 @@ export const BeatPackUploader = () => {
         createdAt: new Date().toISOString(),
       };
 
+      // 1. Add to Beat Pack Store (synchronous local cache + Firestore beat_packs)
       await addPack(newPack);
-      setStatusMessage({ type: 'success', text: 'Beat Pack published successfully with Internet Archive URL!' });
+
+      // 2. Add to Unified Catalog Store (so Admin Songs/Catalog & Storefront see the record)
+      const packBeatRecord: Beat = {
+        id: newPack.id,
+        idempotencyKey: `pack_key_${newPack.id}`,
+        title: `[BEAT PACK] ${newPack.title}`,
+        producerId: 'KRAEZELV',
+        bpm: 140,
+        key: 'Multi-Key',
+        genre: 'Beat Pack',
+        subgenre: 'Sound Kit / Bundle',
+        tags: ['BEAT PACK', 'BUNDLE', 'ZIP'],
+        moods: ['Energetic'],
+        description: newPack.description,
+        slug: newPack.title.toLowerCase().replace(/\s+/g, '-'),
+        isPrivate: false,
+        isBootleg: false,
+        instruments: [],
+        audioUrl: cleanZip,
+        stemsUrl: cleanZip,
+        artworkUrl: cleanArtwork,
+        isFree: false,
+        freeDownloadEnabled: false,
+        freeDownloadEmailRequired: false,
+        freeDownloadType: 'none',
+        beehiivFormUrl: '',
+        playsCount: 0,
+        licenses: {
+          basic: { price: packPrice, enabled: true },
+          premium: { price: packPrice, enabled: false },
+          unlimited: { price: packPrice, enabled: false },
+          exclusive: { price: packPrice, enabled: false },
+        },
+        storage: {
+          provider: 'custom',
+          durableUrl: cleanZip,
+          fileUrl: cleanZip,
+          audioUrl: cleanZip,
+          artworkUrl: cleanArtwork,
+          stemsUrl: cleanZip,
+          uploadedAt: new Date().toISOString(),
+        },
+        createdAt: newPack.createdAt,
+        published: true,
+      };
+
+      await addBeat(packBeatRecord);
+
+      setStatusMessage({ type: 'success', text: 'Beat Pack published successfully to catalog with Internet Archive URL!' });
       setTitle('');
       setDescription('');
       setZipUrl('');
       setSelectedBeatIds([]);
     } catch (err: any) {
+      console.error('[BEAT_PACK_UPLOAD_ERROR]', err);
       setStatusMessage({ type: 'error', text: err?.message || 'Failed to create Beat Pack.' });
     } finally {
       setIsSubmitting(false);
@@ -94,6 +147,21 @@ export const BeatPackUploader = () => {
           uploadedAt: new Date().toISOString(),
         },
       });
+
+      await updateCatalogBeat(editingPack.id, {
+        audioUrl: cleanUrl,
+        stemsUrl: cleanUrl,
+        storage: {
+          provider: 'custom',
+          durableUrl: cleanUrl,
+          fileUrl: cleanUrl,
+          audioUrl: cleanUrl,
+          artworkUrl: editingPack.artworkUrl,
+          stemsUrl: cleanUrl,
+          uploadedAt: new Date().toISOString(),
+        }
+      });
+
       setEditingPack(null);
       setEditZipUrl('');
       setEditError(null);
@@ -342,6 +410,7 @@ export const BeatPackUploader = () => {
                       onClick={() => {
                         if (confirm(`Delete beat pack "${pack.title}"?`)) {
                           removePack(pack.id);
+                          removeCatalogBeat(pack.id);
                         }
                       }}
                       className="p-2.5 text-white/30 hover:text-red-400 transition-colors"

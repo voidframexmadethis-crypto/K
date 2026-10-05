@@ -14,6 +14,33 @@ interface BeatCatalogState {
   findBeatByIdempotencyKey: (key: string) => Beat | undefined;
 }
 
+const STORAGE_KEY = 'kraezelv_persistent_beats_v2';
+
+function loadInitialBeats(): Beat[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('[STORAGE] Failed to load beats from localStorage:', e);
+  }
+  return [];
+}
+
+function persistBeats(beats: Beat[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(beats));
+  } catch (e) {
+    console.warn('[STORAGE] Failed to save beats to localStorage:', e);
+  }
+}
+
 /**
  * Sanitizes beat objects before Firestore writes:
  * - Prevents circular references with WeakSet
@@ -49,10 +76,12 @@ function sanitizeBeatForFirestore(input: any, seen = new WeakSet()): any {
   return clean;
 }
 
+const initialBeats = loadInitialBeats();
+
 export const useBeatCatalogStore = create<BeatCatalogState>()((set, get) => ({
-  beats: [],
-  isLoading: true,
-  isHydrated: false,
+  beats: initialBeats,
+  isLoading: false,
+  isHydrated: true,
 
   findBeatByIdempotencyKey: (key: string) => {
     if (!key) return undefined;
@@ -72,16 +101,19 @@ export const useBeatCatalogStore = create<BeatCatalogState>()((set, get) => ({
       return existing;
     }
 
-    // 2. Optimistic local state update
-    set({ beats: [newBeat, ...state.beats] });
+    // 2. Immediate persistent local update
+    const updatedBeats = [newBeat, ...state.beats];
+    set({ beats: updatedBeats });
+    persistBeats(updatedBeats);
+    console.log(`[CATALOG_PERSISTENCE] Beat added & persisted locally: ${newBeat.id} (${newBeat.title})`);
 
-    // 3. Write to Authoritative Firestore collection: beats/{beatId}
+    // 3. Write to Authoritative Firestore collection: beats/{beatId} (non-blocking)
     const cleanDoc = sanitizeBeatForFirestore(newBeat);
     try {
       await setDoc(doc(db, 'beats', newBeat.id), cleanDoc);
       console.log(`[FIRESTORE_CATALOG] Beat persisted to Firestore: ${newBeat.id}`);
     } catch (err: any) {
-      console.warn('[FIRESTORE_CATALOG] Firestore direct write error:', err?.message || err);
+      console.warn('[FIRESTORE_CATALOG] Firestore direct write warning (persisted locally):', err?.message || err);
     }
 
     // 4. Also notify server-side publish endpoint for synchronization
@@ -102,39 +134,44 @@ export const useBeatCatalogStore = create<BeatCatalogState>()((set, get) => ({
   },
 
   updateBeat: async (id: string, partialBeat: Partial<Beat>) => {
-    // 1. Optimistic local update
-    set((state) => ({
-      beats: state.beats.map((b) =>
-        b.id === id ? { ...b, ...partialBeat } : b
-      ),
-    }));
+    const state = get();
+    const updatedBeats = state.beats.map((b) =>
+      b.id === id ? { ...b, ...partialBeat } : b
+    );
+    set({ beats: updatedBeats });
+    persistBeats(updatedBeats);
+    console.log(`[CATALOG_PERSISTENCE] Beat updated: ${id}`);
 
-    // 2. Authoritative Firestore update
+    // Authoritative Firestore update
     const cleanPartial = sanitizeBeatForFirestore(partialBeat);
     try {
       await updateDoc(doc(db, 'beats', id), cleanPartial);
       console.log(`[FIRESTORE_CATALOG] Beat updated in Firestore: ${id}`);
     } catch (err: any) {
-      console.warn('[FIRESTORE_CATALOG] Firestore updateDoc error:', err?.message || err);
+      console.warn('[FIRESTORE_CATALOG] Firestore updateDoc warning:', err?.message || err);
     }
   },
 
   removeBeat: async (id: string) => {
-    // 1. Optimistic local update
-    set((state) => ({
-      beats: state.beats.filter((b) => b.id !== id),
-    }));
+    const state = get();
+    const updatedBeats = state.beats.filter((b) => b.id !== id);
+    set({ beats: updatedBeats });
+    persistBeats(updatedBeats);
+    console.log(`[CATALOG_PERSISTENCE] Beat removed: ${id}`);
 
-    // 2. Authoritative Firestore deletion
+    // Authoritative Firestore deletion
     try {
       await deleteDoc(doc(db, 'beats', id));
       console.log(`[FIRESTORE_CATALOG] Beat removed from Firestore: ${id}`);
     } catch (err: any) {
-      console.warn('[FIRESTORE_CATALOG] Firestore deleteDoc error:', err?.message || err);
+      console.warn('[FIRESTORE_CATALOG] Firestore deleteDoc warning:', err?.message || err);
     }
   },
 
-  clearCatalog: () => set({ beats: [] }),
+  clearCatalog: () => {
+    set({ beats: [] });
+    persistBeats([]);
+  },
 }));
 
 // Initialize authoritative real-time Firestore synchronization listener
@@ -151,20 +188,45 @@ if (typeof window !== 'undefined') {
         });
       });
 
-      // Sort chronological descending
-      liveBeats.sort((a, b) => {
-        const timeA = new Date(a.createdAt || 0).getTime();
-        const timeB = new Date(b.createdAt || 0).getTime();
-        return timeB - timeA;
-      });
+      if (liveBeats.length > 0) {
+        // Sort chronological descending
+        liveBeats.sort((a, b) => {
+          const timeA = new Date(a.createdAt || 0).getTime();
+          const timeB = new Date(b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
 
-      useBeatCatalogStore.setState({
-        beats: liveBeats,
-        isLoading: false,
-        isHydrated: true,
-      });
+        // Merge with local state to ensure no local unsynced beats are lost
+        const currentBeats = useBeatCatalogStore.getState().beats;
+        const mergedMap = new Map<string, Beat>();
+        
+        // Add live beats first
+        for (const lb of liveBeats) {
+          mergedMap.set(lb.id, lb);
+        }
+        // Add current local beats if not in live beats
+        for (const cb of currentBeats) {
+          if (!mergedMap.has(cb.id)) {
+            mergedMap.set(cb.id, cb);
+          }
+        }
 
-      console.log(`[FIRESTORE_CATALOG] Synced ${liveBeats.length} beats from cloud database.`);
+        const mergedBeats = Array.from(mergedMap.values());
+        mergedBeats.sort((a, b) => {
+          const timeA = new Date(a.createdAt || 0).getTime();
+          const timeB = new Date(b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
+
+        useBeatCatalogStore.setState({
+          beats: mergedBeats,
+          isLoading: false,
+          isHydrated: true,
+        });
+        persistBeats(mergedBeats);
+
+        console.log(`[FIRESTORE_CATALOG] Synced ${liveBeats.length} beats from cloud database (${mergedBeats.length} total).`);
+      }
     },
     (err) => {
       console.warn('[FIRESTORE_CATALOG] onSnapshot subscription warning:', err?.message || err);
