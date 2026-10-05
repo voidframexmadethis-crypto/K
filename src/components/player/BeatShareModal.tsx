@@ -38,8 +38,8 @@ export const BeatShareModal: React.FC<BeatShareModalProps> = ({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${beat.title} — KRAEZELVbeatz`,
-          text: `Listen to "${beat.title}" by ${beat.producerId} on KRAEZELVbeatz Beat Store! 🔥`,
+          title: `${beat.title} — KRAEZELV`,
+          text: `Listen to "${beat.title}" by ${beat.producerId} on KRAEZELV Beat Store! 🔥`,
           url: shareUrl,
         });
       } catch (e) {
@@ -63,7 +63,7 @@ export const BeatShareModal: React.FC<BeatShareModalProps> = ({
   };
 
   const shareOnTwitter = () => {
-    const text = encodeURIComponent(`Check out "${beat.title}" by ${beat.producerId} on KRAEZELVbeatz Beat Store! 🔥`);
+    const text = encodeURIComponent(`Check out "${beat.title}" by ${beat.producerId} on KRAEZELV Beat Store! 🔥`);
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(shareUrl)}`, '_blank');
   };
 
@@ -77,8 +77,8 @@ export const BeatShareModal: React.FC<BeatShareModalProps> = ({
   };
 
   const shareViaEmail = () => {
-    const subject = encodeURIComponent(`Check out "${beat.title}" on KRAEZELVbeatz`);
-    const body = encodeURIComponent(`Hey! Listen to "${beat.title}" by ${beat.producerId} on KRAEZELVbeatz:\n\n${shareUrl}`);
+    const subject = encodeURIComponent(`Check out "${beat.title}" on KRAEZELV`);
+    const body = encodeURIComponent(`Hey! Listen to "${beat.title}" by ${beat.producerId} on KRAEZELV:\n\n${shareUrl}`);
     window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
   };
 

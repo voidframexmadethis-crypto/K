@@ -77,7 +77,7 @@ export const TopTracksScoreboard: React.FC = () => {
                       {beat.title}
                     </h3>
                     <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                      PRODUCER: KRAEZELVbeatz
+                      PRODUCER: KRAEZELV
                     </span>
                   </div>
                 </div>

@@ -51,10 +51,10 @@ export const HeroSpotlightCarousel: React.FC = () => {
       </div>
 
       <div className="relative z-10 w-full max-w-[1700px] px-6 sm:px-10 md:px-12 mx-auto">
-        {/* KRAEZELVbeatz Single Producer Kicker */}
+        {/* KRAEZELV Single Producer Kicker */}
         <div className="flex items-center gap-3 mb-8">
           <span className="text-[10px] font-black uppercase tracking-[0.35em] text-purple-400 bg-purple-950/40 border border-purple-500/30 px-3.5 py-1.5 flex items-center gap-2">
-            <Sparkles size={12} className="text-purple-400" /> KRAEZELVbeatz · OFFICIAL STORE
+            <Sparkles size={12} className="text-purple-400" /> KRAEZELV · OFFICIAL STORE
           </span>
           <div className="h-px w-16 bg-white/15 hidden sm:block" />
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/40 hidden md:inline">
@@ -78,7 +78,7 @@ export const HeroSpotlightCarousel: React.FC = () => {
                 </h1>
 
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-bold uppercase tracking-wider text-white/70 pt-1">
-                  <span className="text-white font-black">PRODUCED BY KRAEZELVbeatz</span>
+                  <span className="text-white font-black">PRODUCED BY KRAEZELV</span>
                   <span className="text-white/30">·</span>
                   <span className="text-purple-400 font-black">{flagshipBeat.bpm} BPM</span>
                   <span className="text-white/30">·</span>
@@ -88,7 +88,7 @@ export const HeroSpotlightCarousel: React.FC = () => {
                 </div>
 
                 <p className="text-sm md:text-base text-white/60 leading-relaxed max-w-xl pt-2">
-                  Official high-quality master produced by KRAEZELVbeatz. Ready for instant WAV, MP3, and track-out stem licensing.
+                  Official high-quality master produced by KRAEZELV. Ready for instant WAV, MP3, and track-out stem licensing.
                 </p>
               </div>
 
@@ -171,7 +171,7 @@ export const HeroSpotlightCarousel: React.FC = () => {
 
                   <div className="flex flex-col justify-center gap-2 text-center sm:text-left flex-1">
                     <span className="text-[9px] font-black uppercase tracking-[0.3em] text-purple-400">
-                      KRAEZELVbeatz · EXCLUSIVE MASTER
+                      KRAEZELV · EXCLUSIVE MASTER
                     </span>
                     <h3 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">
                       {flagshipBeat.title}
@@ -284,7 +284,7 @@ export const HeroSpotlightCarousel: React.FC = () => {
             <div className="pt-6 border-t border-white/10 w-full flex justify-center gap-8 text-[10px] font-mono text-white/40 uppercase tracking-widest">
               <span>0 Demo Tracks Remaining</span>
               <span>·</span>
-              <span>100% KRAEZELVbeatz Catalog</span>
+              <span>100% KRAEZELV Catalog</span>
             </div>
           </div>
         )}

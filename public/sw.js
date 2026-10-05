@@ -11,7 +11,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'KRAEZELVbeatz Store', options)
+    self.registration.showNotification(data.title || 'KRAEZELV Store', options)
   );
 });
 

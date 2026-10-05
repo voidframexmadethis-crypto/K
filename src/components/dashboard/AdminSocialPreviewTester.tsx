@@ -35,7 +35,7 @@ export const AdminSocialPreviewTester = () => {
 
   const handleTestShareTwitter = () => {
     if (!selectedBeat) return;
-    const text = encodeURIComponent(`Listen to "${selectedBeat.title}" by ${selectedBeat.producerId} on KRAEZELVbeatz! 🔥`);
+    const text = encodeURIComponent(`Listen to "${selectedBeat.title}" by ${selectedBeat.producerId} on KRAEZELV! 🔥`);
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(shareUrl)}`, '_blank');
   };
 
@@ -116,7 +116,7 @@ export const AdminSocialPreviewTester = () => {
                   <Globe size={10} /> kraezelvbeatz.com
                 </span>
                 <h5 className="text-base font-black uppercase text-white truncate tracking-tight">
-                  {selectedBeat.title} — KRAEZELVbeatz
+                  {selectedBeat.title} — KRAEZELV
                 </h5>
                 <p className="text-xs text-white/60 line-clamp-2 font-light">
                   {selectedBeat.description || `Stream and license official instrumental beat ${selectedBeat.title} produced by ${selectedBeat.producerId} in ${selectedBeat.genre}.`}
@@ -192,11 +192,11 @@ export const AdminSocialPreviewTester = () => {
                 <div className="space-y-1 w-full">
                   <span className="text-white font-bold uppercase block">✓ Open Graph Tags Generated</span>
                   <div className="p-2 bg-neutral-900 border border-white/10 text-[9px] text-white/70 space-y-1">
-                    <div>og:title = "{selectedBeat.title} — KRAEZELVbeatz"</div>
+                    <div>og:title = "{selectedBeat.title} — KRAEZELV"</div>
                     <div>og:description = "{selectedBeat.description || 'Official Beat Instrumental'}"</div>
                     <div className="truncate">og:image = "{selectedBeat.artworkUrl}"</div>
                     <div>og:url = "{shareUrl}"</div>
-                    <div>og:site_name = "KRAEZELVbeatz"</div>
+                    <div>og:site_name = "KRAEZELV"</div>
                   </div>
                 </div>
               </div>
@@ -208,7 +208,7 @@ export const AdminSocialPreviewTester = () => {
                   <span className="text-white font-bold uppercase block">✓ Twitter Large-Image Card Tags</span>
                   <div className="p-2 bg-neutral-900 border border-white/10 text-[9px] text-white/70 space-y-1">
                     <div>twitter:card = "summary_large_image"</div>
-                    <div>twitter:title = "{selectedBeat.title} — KRAEZELVbeatz"</div>
+                    <div>twitter:title = "{selectedBeat.title} — KRAEZELV"</div>
                     <div className="truncate">twitter:image = "{selectedBeat.artworkUrl}"</div>
                   </div>
                 </div>

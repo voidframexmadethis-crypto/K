@@ -58,7 +58,7 @@ export const MarketplaceMonetization: React.FC = () => {
     }
   ];
 
-  // Empty array by default for KRAEZELVbeatz
+  // Empty array by default for KRAEZELV
   const soundKits: SoundKit[] = [];
 
   return (

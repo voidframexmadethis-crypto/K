@@ -42,7 +42,7 @@ export const ProducerProfilePage = () => {
       }
     }
     return {
-      displayName: 'KRAEZELVbeatz',
+      displayName: 'KRAEZELV',
       username: 'kraezelv',
       location: 'Atlanta, GA / Global',
       primaryGenre: 'Dark Trap / UK Drill',

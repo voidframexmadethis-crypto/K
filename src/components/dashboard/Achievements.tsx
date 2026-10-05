@@ -20,7 +20,7 @@ export const Achievements = () => {
     <div className="flex flex-col gap-12">
       <div>
         <h2 className="text-4xl font-bold uppercase tracking-tighter text-white mb-4">Record Plaque Hall</h2>
-        <p className="text-white/40 text-sm uppercase tracking-widest">KRAEZELVBEATZ Verified Milestones & Achievements</p>
+        <p className="text-white/40 text-sm uppercase tracking-widest">KRAEZELV Verified Milestones & Achievements</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

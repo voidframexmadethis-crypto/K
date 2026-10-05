@@ -93,7 +93,7 @@ export const MainHeader = () => {
           </span>
           <span className="h-2 w-px bg-white/10" />
           {/* 10. Help & Comprehensive FAQ Repository */}
-          <a href="mailto:kraezelv@gmail.com?subject=KRAEZELVbeatz%20Support%20%26%20FAQ" className="flex items-center gap-1.5 hover:text-white transition-colors">
+          <a href="mailto:kraezelv@gmail.com?subject=KRAEZELV%20Support%20%26%20FAQ" className="flex items-center gap-1.5 hover:text-white transition-colors">
             <HelpCircle size={12} /> Help & FAQ
           </a>
         </div>
@@ -135,7 +135,7 @@ export const MainHeader = () => {
           </div>
           <div className="flex flex-col">
             <span className="text-lg md:text-xl font-black tracking-[0.2em] text-white leading-none">
-              KRAEZELV<span className="text-purple-400">beatz</span>
+              KRAEZELV
             </span>
             <span className="text-[8px] font-bold uppercase tracking-[0.35em] text-white/40 mt-1">OFFICIAL STORE</span>
           </div>
@@ -353,7 +353,7 @@ export const MainHeader = () => {
 
               <div className="flex flex-col gap-6 pt-12">
                 <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/20">
-                  © 2026 KRAEZELVBEATZ
+                  © 2026 KRAEZELV
                 </p>
               </div>
             </div>

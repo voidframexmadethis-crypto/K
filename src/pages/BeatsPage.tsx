@@ -26,7 +26,7 @@ export const BeatsPage = () => {
         <div className="max-w-2xl">
           <h2 className="text-6xl font-bold uppercase tracking-tighter text-white mb-6">Catalog</h2>
           <p className="text-white/40 text-sm uppercase tracking-widest leading-loose">
-            Explore the complete KRAEZELVbeatz archive. High-standard production for the modern digital landscape.
+            Explore the complete KRAEZELV archive. High-standard production for the modern digital landscape.
           </p>
         </div>
         

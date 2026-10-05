@@ -19,7 +19,7 @@ export const ProducerFeature = () => {
                <span className="text-xs font-black uppercase tracking-[0.5em] text-purple-400">Architect of Sound</span>
             </div>
             <h2 className="text-6xl md:text-8xl font-black text-white leading-[0.85]">
-              KRAEZELV<br /><span className="text-purple-400">beatz</span>
+              KRAEZELV
             </h2>
           </div>
 

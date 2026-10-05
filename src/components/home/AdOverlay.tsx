@@ -91,7 +91,7 @@ export const AdOverlay = () => {
 
               <div className="space-y-4">
                 <p className="text-xs text-white/60 leading-relaxed">
-                  {beat?.description || "Check out this exclusive production from KRAEZELVbeatz. High-quality licenses and untagged masters available now."}
+                  {beat?.description || "Check out this exclusive production from KRAEZELV. High-quality licenses and untagged masters available now."}
                 </p>
               </div>
             </div>

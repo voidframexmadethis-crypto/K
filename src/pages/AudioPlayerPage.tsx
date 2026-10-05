@@ -40,7 +40,7 @@ export const AudioPlayerPage = () => {
                   </button>
                   <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none">{activeBeat.title}</h1>
                 </div>
-                <p className="text-purple-400 font-bold uppercase tracking-widest text-xs">PRODUCED BY KRAEZELVbeatz</p>
+                <p className="text-purple-400 font-bold uppercase tracking-widest text-xs">PRODUCED BY KRAEZELV</p>
                 <div className="flex items-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
                   <span>BPM: {activeBeat.bpm}</span>
                   <span>KEY: {activeBeat.key}</span>

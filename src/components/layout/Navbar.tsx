@@ -25,7 +25,7 @@ export const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
         {/* Zone 1: Brand */}
         <Link to="/" className="text-2xl font-bold tracking-tighter text-white uppercase">
-          KRAEZELVBEATZ
+          KRAEZELV
         </Link>
 
         {/* Zone 2: Nav Links */}

@@ -47,7 +47,7 @@ export const Hero = () => {
           </div>
 
           <p className="text-lg text-white/40 max-w-lg uppercase tracking-tight leading-relaxed">
-            Premium industry-standard production. Elevate your sound with the signature KRAEZELVBEATZ aesthetic.
+            Premium industry-standard production. Elevate your sound with the signature KRAEZELV aesthetic.
           </p>
 
           <div className="flex flex-wrap items-center gap-6 mt-4">

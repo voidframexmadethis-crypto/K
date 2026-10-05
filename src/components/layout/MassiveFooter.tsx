@@ -9,7 +9,7 @@ export const MassiveFooter = () => {
     <footer className="bg-black border-t border-white/5 pt-40 pb-20 relative overflow-hidden">
       {/* Background oversized wordmark */}
       <div className="absolute -bottom-20 left-0 w-full text-[25vw] font-black text-white/[0.02] uppercase tracking-[-0.1em] select-none pointer-events-none whitespace-nowrap">
-        KRAEZELVBEATZ
+        KRAEZELV
       </div>
 
       <div className="max-w-[1800px] mx-auto px-6 md:px-12 relative z-10">
@@ -18,7 +18,7 @@ export const MassiveFooter = () => {
           {/* Brand Col */}
           <div className="lg:col-span-4 flex flex-col gap-10">
             <Link to="/" className="text-3xl font-black tracking-[0.2em] text-white uppercase leading-none">
-              KRAEZELV<span className="text-white/40">BEATZ</span>
+              KRAEZELV
             </Link>
             <p className="text-lg text-white/40 uppercase tracking-tight leading-relaxed max-w-sm">
               The definitive standalone producer ecosystem for modern artists and industry professionals. Redefining the standard of music technology platforms.
@@ -122,7 +122,7 @@ export const MassiveFooter = () => {
         {/* Bottom Bar */}
         <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
            <div className="flex flex-col md:flex-row items-center gap-12 text-[8px] font-bold uppercase tracking-[0.4em] text-white/20">
-              <span>© 2026 KRAEZELVBEATZ PLATFORM</span>
+              <span>© 2026 KRAEZELV PLATFORM</span>
               <div className="flex gap-8">
                  <Link to="/services" className="hover:text-white transition-colors">Privacy Architecture</Link>
                  <Link to="/services" className="hover:text-white transition-colors">Terms of Service</Link>

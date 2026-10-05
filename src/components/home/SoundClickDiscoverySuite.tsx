@@ -23,7 +23,7 @@ export const SoundClickDiscoverySuite: React.FC = () => {
   const [activeShareBeat, setActiveShareBeat] = useState<Beat | null>(null);
   const [activeTipBeat, setActiveTipBeat] = useState<Beat | null>(null);
   const [activeCommentBeat, setActiveCommentBeat] = useState<Beat | null>(null);
-  const [bookmarkedArtists, setBookmarkedArtists] = useState<string[]>(['KRAEZELVbeatz']);
+  const [bookmarkedArtists, setBookmarkedArtists] = useState<string[]>(['KRAEZELV']);
   const [commentText, setCommentText] = useState('');
   const [tipAmount, setTipAmount] = useState('5.00');
 
@@ -45,7 +45,7 @@ export const SoundClickDiscoverySuite: React.FC = () => {
     delta: 0,
     peakRank: idx + 1,
     subgenre: b.genre || 'Hip Hop',
-    artist: 'KRAEZELVbeatz',
+    artist: 'KRAEZELV',
     isExplicit: false,
     duration: '03:15',
     rating: 5.0,
@@ -188,7 +188,7 @@ export const SoundClickDiscoverySuite: React.FC = () => {
                             {track.title}
                           </h3>
                           <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                            PRODUCER: KRAEZELVbeatz · {track.genre}
+                            PRODUCER: KRAEZELV · {track.genre}
                           </span>
                         </div>
                       </div>

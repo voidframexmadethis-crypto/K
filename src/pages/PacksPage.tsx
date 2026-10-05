@@ -23,7 +23,7 @@ export const PacksPage = () => {
           <div className="space-y-2">
             <h3 className="text-2xl font-black uppercase text-white tracking-tight">NO BEAT PACKS CREATED YET</h3>
             <p className="text-white/40 uppercase tracking-widest text-xs leading-relaxed">
-              You are the exclusive producer for KRAEZELVbeatz. Create beat packs and stem bundles in the Producer Dashboard to publish them here.
+              You are the exclusive producer for KRAEZELV. Create beat packs and stem bundles in the Producer Dashboard to publish them here.
             </p>
           </div>
           <Link to="/dashboard" className="px-10 py-5 bg-white text-black text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 hover:bg-neutral-200 transition-colors">

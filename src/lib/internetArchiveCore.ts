@@ -219,7 +219,7 @@ export async function executeIAUpload(params: {
     mimeType,
     fileSize = 0,
     title = 'Instrumental Beat',
-    creator = 'KRAEZELVbeatz',
+    creator = 'KRAEZELV',
   } = params;
 
   if (!accessKey || !secretKey) {
@@ -237,7 +237,7 @@ export async function executeIAUpload(params: {
 
   // Sanitize metadata for ASCII headers (Internet Archive requires ASCII header values)
   const safeTitle = title.replace(/[^\x20-\x7E]/g, '').trim() || 'Instrumental';
-  const safeCreator = creator.replace(/[^\x20-\x7E]/g, '').trim() || 'KRAEZELVbeatz';
+  const safeCreator = creator.replace(/[^\x20-\x7E]/g, '').trim() || 'KRAEZELV';
 
   const headers: Record<string, string> = {
     Authorization: `LOW ${accessKey}:${secretKey}`,

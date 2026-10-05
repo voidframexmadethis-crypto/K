@@ -40,8 +40,8 @@ export function useBeatDeepLink() {
 function updateHeadMetaTags(beat: Beat) {
   if (typeof document === 'undefined') return;
 
-  const titleText = `${beat.title} — KRAEZELVbeatz`;
-  const descText = beat.description || `Stream and license official instrumental beat "${beat.title}" produced by ${beat.producerId} on KRAEZELVbeatz.`;
+  const titleText = `${beat.title} — KRAEZELV`;
+  const descText = beat.description || `Stream and license official instrumental beat "${beat.title}" produced by ${beat.producerId} on KRAEZELV.`;
   const shareUrl = `${window.location.origin}/?beat=${beat.id}`;
   const artworkUrl = beat.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80';
 
@@ -64,7 +64,7 @@ function updateHeadMetaTags(beat: Beat) {
   setMetaTag('meta[property="og:description"]', 'property', 'og:description', descText);
   setMetaTag('meta[property="og:image"]', 'property', 'og:image', artworkUrl);
   setMetaTag('meta[property="og:url"]', 'property', 'og:url', shareUrl);
-  setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', 'KRAEZELVbeatz');
+  setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', 'KRAEZELV');
   setMetaTag('meta[property="og:type"]', 'property', 'og:type', 'music.song');
 
   // Twitter

@@ -2,7 +2,7 @@
  * PERMANENT BEEHIIV NEWSLETTER INTEGRATION CONFIGURATION
  * 
  * CRITICAL STORE INTEGRATION NOTE:
- * This Beehiiv Form ID connects the KRAEZELVbeatz Free Download email gate directly
+ * This Beehiiv Form ID connects the KRAEZELV Free Download email gate directly
  * to Bucky's Newsletter audience (https://buckys-newsletter.beehiiv.com/).
  * 
  * Do NOT remove, rename, or alter this public Form ID during future codebase edits,

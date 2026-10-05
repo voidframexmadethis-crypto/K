@@ -227,7 +227,7 @@ async function startServer() {
         const title =
           (req.query.title as string) || (req.headers['x-title'] as string) || 'Instrumental Beat';
         const producer =
-          (req.query.producer as string) || (req.headers['x-producer'] as string) || 'KRAEZELVbeatz';
+          (req.query.producer as string) || (req.headers['x-producer'] as string) || 'KRAEZELV';
         const existingItemId =
           (req.query.existingItemId as string) ||
           (req.headers['x-existing-item-id'] as string) ||
@@ -428,7 +428,7 @@ async function startServer() {
   // Push Notification Test Endpoint
   app.post('/api/notifications/test', async (req: Request, res: Response) => {
     await sendPushNotification({ 
-      title: 'KRAEZELVbeatz Store', 
+      title: 'KRAEZELV Store', 
       body: 'Test notification successful.',
       url: '/dashboard/notifications'
     });
@@ -538,7 +538,7 @@ async function startServer() {
           
           // Trigger Sale Notification
           await sendPushNotification({
-            title: 'KRAEZELVbeatz Store',
+            title: 'KRAEZELV Store',
             body: `New Sale: Beat purchased successfully!`,
             url: '/dashboard/sales'
           });
@@ -623,10 +623,10 @@ async function startServer() {
       const shareUrl = `${protocol}://${host}/?beat=${beatId}`;
 
       const beatTitle = matchedBeat ? matchedBeat.title : `Official Beat [${beatId}]`;
-      const producerName = matchedBeat ? matchedBeat.producerId : 'KRAEZELVbeatz';
+      const producerName = matchedBeat ? matchedBeat.producerId : 'KRAEZELV';
       const beatDesc = matchedBeat 
-        ? (matchedBeat.description || `${matchedBeat.genre} Instrumental by ${matchedBeat.producerId}. Stream and license on KRAEZELVbeatz Store.`)
-        : `Stream and license official instrumental beat on KRAEZELVbeatz Beat Store.`;
+        ? (matchedBeat.description || `${matchedBeat.genre} Instrumental by ${matchedBeat.producerId}. Stream and license on KRAEZELV Store.`)
+        : `Stream and license official instrumental beat on KRAEZELV Beat Store.`;
       const artworkUrl = matchedBeat 
         ? matchedBeat.artworkUrl 
         : `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80`;
@@ -645,7 +645,7 @@ async function startServer() {
         <meta property="og:description" content="${beatDesc}" />
         <meta property="og:image" content="${artworkUrl}" />
         <meta property="og:url" content="${shareUrl}" />
-        <meta property="og:site_name" content="KRAEZELVbeatz" />
+        <meta property="og:site_name" content="KRAEZELV" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="${fullOgTitle}" />
         <meta name="twitter:description" content="${beatDesc}" />

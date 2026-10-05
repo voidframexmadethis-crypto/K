@@ -50,7 +50,7 @@ export const AnalyticsDashboard = () => {
   }, []);
 
   // Compute metrics from live Firestore events
-  // Filter out admin activity (KRAEZELVbeatz admin assumed)
+  // Filter out admin activity (KRAEZELV admin assumed)
   const isOwnerActivity = (e: AnalyticsEventData) => e.device?.includes('Desktop'); // Simple heuristic based on current store usage
   const customerEvents = events.filter(e => !isOwnerActivity(e));
   

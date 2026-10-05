@@ -152,7 +152,7 @@ export const ServicesPage = () => {
     {
       role: 'engineer',
       title: 'Mixing & Mastering Engineers',
-      description: 'Collaborate with the KRAEZELVbeatz production house. Join our certified post-production engineering network.',
+      description: 'Collaborate with the KRAEZELV production house. Join our certified post-production engineering network.',
       icon: Settings,
       color: 'amber'
     },
@@ -349,7 +349,7 @@ export const ServicesPage = () => {
                     DISTRIBUTE YOUR MUSIC WORLDWIDE
                   </h2>
                   <p className="text-white/60 leading-relaxed text-sm">
-                    Artist should distribute from my store. KRAEZELVbeatz partners with the world's leading aggregators to ensure your music reaches every ear on the planet. Start your distribution journey directly from our store to all major platforms.
+                    Artist should distribute from my store. KRAEZELV partners with the world's leading aggregators to ensure your music reaches every ear on the planet. Start your distribution journey directly from our store to all major platforms.
                   </p>
                 </div>
 

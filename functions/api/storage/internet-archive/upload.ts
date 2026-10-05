@@ -85,7 +85,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     let category = 'audio';
     let beatId = '';
     let title = 'Instrumental Beat';
-    let producer = 'KRAEZELVbeatz';
+    let producer = 'KRAEZELV';
     let existingItemId: string | undefined = undefined;
     let mimeType = '';
     let fileSize = 0;
@@ -106,7 +106,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
       category = (formData.get('category') as string) || 'audio';
       beatId = (formData.get('beatId') as string) || '';
       title = (formData.get('title') as string) || 'Instrumental Beat';
-      producer = (formData.get('producer') as string) || 'KRAEZELVbeatz';
+      producer = (formData.get('producer') as string) || 'KRAEZELV';
       existingItemId = (formData.get('existingItemId') as string) || undefined;
     } else {
       // Direct binary stream mode with headers/query params
@@ -115,7 +115,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
       category = url.searchParams.get('category') || request.headers.get('x-category') || 'audio';
       beatId = url.searchParams.get('beatId') || request.headers.get('x-beat-id') || '';
       title = url.searchParams.get('title') || request.headers.get('x-title') || 'Instrumental Beat';
-      producer = url.searchParams.get('producer') || request.headers.get('x-producer') || 'KRAEZELVbeatz';
+      producer = url.searchParams.get('producer') || request.headers.get('x-producer') || 'KRAEZELV';
       existingItemId = url.searchParams.get('existingItemId') || request.headers.get('x-existing-item-id') || undefined;
       mimeType = request.headers.get('content-type') || '';
 

@@ -1,5 +1,5 @@
 /**
- * KRAEZELVbeatz Persistent Storage & Streaming Engine
+ * KRAEZELV Persistent Storage & Streaming Engine
  * Cloudflare Pages Function -> Internet Archive Pipeline
  * Durable media hosting on Internet Archive with metadata persisted in Firestore.
  */
@@ -78,7 +78,7 @@ export async function uploadToStorage(
     'x-beat-id': cleanBeatId,
     'x-filename': sanitizedName,
     'x-title': metadata?.title || 'Instrumental Beat',
-    'x-producer': metadata?.producer || 'KRAEZELVbeatz',
+    'x-producer': metadata?.producer || 'KRAEZELV',
   };
 
   if (metadata?.existingItemId) {

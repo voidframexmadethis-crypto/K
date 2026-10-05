@@ -118,7 +118,7 @@ export const ContentLab = () => {
     try {
       const link = document.createElement('a');
       link.href = variant.generatedVideoUrl;
-      link.download = `KRAEZELVbeatz__ad_${variant.id}.mp4`.replace(/[^a-z0-9.]/gi, '_');
+      link.download = `KRAEZELV__ad_${variant.id}.mp4`.replace(/[^a-z0-9.]/gi, '_');
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();

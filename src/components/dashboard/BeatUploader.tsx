@@ -59,7 +59,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
   const [formData, setFormData] = useState({
     // 1. Release Info
     title: 'VALKYRIE',
-    producerId: 'KRAEZELVbeatz',
+    producerId: 'KRAEZELV',
     typeBeatArtist: 'Drake x Future',
     description: 'Dark atmospheric trap instrumental with heavy sliding 808s and brass stabs.',
     durationMs: 204580,
@@ -312,7 +312,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         id: newBeatId,
         idempotencyKey,
         title: formData.title || 'Untitled Beat',
-        producerId: formData.producerId || 'KRAEZELVbeatz',
+        producerId: formData.producerId || 'KRAEZELV',
         bpm: parseInt(formData.bpm) || 140,
         key: formData.key || 'C Minor',
         genre: formData.primaryGenre || 'Trap',
@@ -404,7 +404,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             Beat Uploader
           </h2>
           <p className="text-white/40 text-xs font-bold uppercase tracking-widest mt-1">
-            KRAEZELVbeatz Independent Catalog Publishing Suite
+            KRAEZELV Independent Catalog Publishing Suite
           </p>
         </div>
 
