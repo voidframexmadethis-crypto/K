@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBeatCatalogStore } from '../../store/useBeatCatalogStore';
-import { validateValleyFileUrl, createValleyFileStorageMetadata, validateAudioFile } from '../../lib/storageEngine';
+import { validateStorageUrl, createStorageMetadata, validateAudioFile } from '../../lib/storageEngine';
 import { BEEHIIV_CONFIG } from '../../config/beehiiv';
 import { Beat } from '../../types';
 import { 
@@ -11,7 +11,7 @@ import {
   Volume2, Sparkles, RefreshCw, Key, Share2, Copy, Check, Eye, 
   EyeOff, Sliders, Cpu, Video, Download, FileText, PieChart, 
   CreditCard, Radio, Hash, Mic, Award, Zap, ChevronDown, ChevronUp,
-  HardDrive, Activity, Palette, SlidersHorizontal, ToggleLeft, ToggleRight
+  HardDrive, Activity, Palette, SlidersHorizontal, ToggleLeft, ToggleRight, ExternalLink
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -68,7 +68,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     stemZipFileName: 'Valkyrie_WAV_Stems_Bundle.zip',
     lyrics: '[Intro]\nYeah, KRAEZELV on the track...\n[Chorus]\nSliding through the dark...',
 
-    // 2. Audio & Watermarking (ValleyFile Direct URL Integration)
+    // 2. Audio & Watermarking (Direct Direct URL Integration)
     audioUrl: editingBeat?.audioUrl || editingBeat?.storage?.durableUrl || '',
     artworkUrl: editingBeat?.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80',
     stemsUrl: editingBeat?.stemsUrl || '',
@@ -212,7 +212,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
   const iframeCode = `<iframe src="${currentOrigin}/embed/beat/${formData.title.toLowerCase() || 'track'}?theme=dark" width="${formData.embedWidth}%" height="${formData.embedHeight}" frameborder="0" allow="autoplay"></iframe>`;
 
   // Validation Checks for Readiness Checklist
-  const audioValidation = validateValleyFileUrl(formData.audioUrl, 'audio');
+  const audioValidation = validateStorageUrl(formData.audioUrl, 'audio');
   const isAudioReady = Boolean(formData.audioUrl && audioValidation.valid);
   const isArtworkReady = Boolean(formData.artworkUrl);
   const isMetadataReady = Boolean(formData.title && formData.bpm && formData.key && formData.primaryGenre);
@@ -248,19 +248,19 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     const idempotencyKey = currentSubmissionIdRef.current;
 
     try {
-      // 4. Validate ValleyFile Audio URL
-      const audioCheck = validateValleyFileUrl(formData.audioUrl, 'audio');
+      // 4. Validate Direct Audio URL
+      const audioCheck = validateStorageUrl(formData.audioUrl, 'audio');
       if (!audioCheck.valid) {
-        setSubmissionError(audioCheck.error || 'Please provide a valid ValleyFile Direct File URL for the master audio.');
+        setSubmissionError(audioCheck.error || 'Please provide a valid Direct Direct File URL for the master audio.');
         setIsSubmitting(false);
         isSubmittingRef.current = false;
         return;
       }
 
       if (formData.stemsUrl) {
-        const stemsCheck = validateValleyFileUrl(formData.stemsUrl, 'stems');
+        const stemsCheck = validateStorageUrl(formData.stemsUrl, 'stems');
         if (!stemsCheck.valid) {
-          setSubmissionError(stemsCheck.error || 'Invalid ValleyFile Stems URL.');
+          setSubmissionError(stemsCheck.error || 'Invalid Direct Stems URL.');
           setIsSubmitting(false);
           isSubmittingRef.current = false;
           return;
@@ -298,7 +298,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
           freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
           beehiivFormUrl: formData.beehiivFormUrl || '',
           storage: {
-            provider: 'valleyfile',
+            provider: 'custom',
             durableUrl: formData.audioUrl.trim(),
             fileUrl: formData.audioUrl.trim(),
             audioUrl: formData.audioUrl.trim(),
@@ -323,7 +323,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         return;
       }
 
-      // 7. Create NEW Beat Record with ValleyFile Storage Metadata
+      // 7. Create NEW Beat Record with Direct Storage Metadata
       const newBeatId = activeBeatIdRef.current;
       const cleanAudioUrl = formData.audioUrl.trim();
       const cleanArtworkUrl = formData.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1200&auto=format&fit=crop&q=80';
@@ -366,7 +366,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
           exclusive: { price: parseFloat(formData.exclusiveBuyoutPrice) || 499.99, enabled: formData.enabledLicenses.exclusive },
         },
         storage: {
-          provider: 'valleyfile',
+          provider: 'custom',
           durableUrl: cleanAudioUrl,
           fileUrl: cleanAudioUrl,
           audioUrl: cleanAudioUrl,
@@ -508,19 +508,29 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <Music size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Audio Hosting — ValleyFile</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Internet Archive Audio File</h3>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">ValleyFile Direct Link Synced</span>
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Manual Internet Archive Workflow</span>
             </div>
 
-            <div className="p-4 bg-purple-950/20 border border-purple-500/20 rounded-sm space-y-2">
-              <div className="flex items-center gap-2 text-xs font-black uppercase text-purple-300">
-                <Sparkles size={14} /> ValleyFile Direct URL Instructions
+            <div className="p-5 bg-purple-950/20 border border-purple-500/20 rounded-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-purple-300">
+                  <Globe size={14} /> Internet Archive Audio Workflow (iPad & Mobile Friendly)
+                </div>
+                <a
+                  href="https://archive.org/create/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-[0.2em] text-[10px] transition-all flex items-center gap-2 rounded-xs shadow-lg"
+                >
+                  Open Internet Archive Upload <ExternalLink size={12} />
+                </a>
               </div>
               <p className="text-[11px] text-white/70 leading-relaxed font-medium">
-                1. Upload your master MP3 or M4A manually to <span className="text-white font-bold">ValleyFile</span>.<br />
-                2. Copy the direct public ValleyFile link.<br />
-                3. Paste that link below into the <span className="text-white font-bold">ValleyFile Direct File URL</span> field.<br />
+                1. Tap <strong className="text-white">Open Internet Archive Upload</strong> to upload your master MP3 or M4A file on archive.org.<br />
+                2. Once processing is complete, copy your permanent Internet Archive file/download URL.<br />
+                3. Paste the URL below into <strong className="text-white">Paste Internet Archive File URL</strong> and click <strong className="text-white">Save Audio URL</strong>.<br />
                 <span className="text-red-400 font-bold">Note: WAV format is permanently prohibited. Only high-resolution MP3 and M4A master files are supported.</span>
               </p>
             </div>
@@ -531,7 +541,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Untagged Master *</span>
-                    <h4 className="text-lg font-black text-white uppercase">VALLEYFILE DIRECT FILE URL</h4>
+                    <h4 className="text-lg font-black text-white uppercase">Internet Archive Audio File</h4>
                   </div>
                   <FileAudio size={24} className="text-white/40" />
                 </div>
@@ -543,7 +553,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                      VALLEYFILE DIRECT FILE URL *
+                      Paste Internet Archive File URL *
                     </label>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input 
@@ -557,22 +567,22 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                             audioFileName: val ? (val.split('/').pop() || 'master_audio.mp3') : '',
                           }));
                         }}
-                        placeholder="[ Paste ValleyFile URL here ]"
-                        className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                        placeholder="https://archive.org/download/.../master.mp3"
+                        className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-4 text-xs font-mono text-white outline-none transition-colors"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          const check = validateValleyFileUrl(formData.audioUrl, 'audio');
+                          const check = validateStorageUrl(formData.audioUrl, 'audio');
                           if (check.valid) {
-                            alert(`✓ ValleyFile URL validated successfully!\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: ValleyFile`);
+                            alert(`✓ Internet Archive Audio URL saved successfully!\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: Internet Archive`);
                           } else {
                             alert(`Validation Error: ${check.error}`);
                           }
                         }}
-                        className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
+                        className="px-6 py-4 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
                       >
-                        Validate URL
+                        Save Audio URL
                       </button>
                     </div>
                   </div>
@@ -584,7 +594,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                         <div className="space-y-3 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-sm">
                           <div className="flex items-center justify-between">
                             <span className="flex items-center gap-1.5 font-bold uppercase text-emerald-400">
-                              <CheckCircle size={14} /> ✓ ValleyFile URL saved
+                              <CheckCircle size={14} /> ✓ Internet Archive Audio saved
                             </span>
                             <span className="text-[9px] uppercase px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-xs">
                               Active
@@ -593,7 +603,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                           
                           <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
                             <div>File type: <span className="text-white font-bold">{audioValidation.fileType?.toUpperCase() || 'MP3'}</span></div>
-                            <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                            <div>Storage provider: <span className="text-white font-bold">Internet Archive</span></div>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -601,9 +611,9 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                               type="button"
                               onClick={() => {
                                 const audio = new Audio(formData.audioUrl);
-                                audio.play().catch(() => alert('Could not play stream from ValleyFile URL. Please verify link is publicly accessible.'));
+                                audio.play().catch(() => alert('Could not play stream from Internet Archive URL. Please verify link is publicly accessible.'));
                               }}
-                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black font-black uppercase text-[8px] tracking-wider rounded-xs transition-colors"
+                              className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black font-black uppercase text-[9px] tracking-wider rounded-xs transition-colors"
                             >
                               ▶ Test Stream
                             </button>
@@ -612,9 +622,9 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                               type="button"
                               onClick={() => {
                                 navigator.clipboard.writeText(formData.audioUrl);
-                                alert('ValleyFile URL copied to clipboard');
+                                alert('Internet Archive URL copied to clipboard');
                               }}
-                              className="px-2.5 py-1 bg-white/10 hover:bg-white text-white hover:text-black font-black uppercase text-[8px] tracking-wider rounded-xs transition-colors"
+                              className="px-3 py-2 bg-white/10 hover:bg-white text-white hover:text-black font-black uppercase text-[9px] tracking-wider rounded-xs transition-colors"
                             >
                               Copy URL
                             </button>
@@ -622,7 +632,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                             <button
                               type="button"
                               onClick={() => {
-                                const newUrl = prompt('Enter new ValleyFile Direct File URL:', formData.audioUrl);
+                                const newUrl = prompt('Enter new Internet Archive Audio File URL:', formData.audioUrl);
                                 if (newUrl !== null) {
                                   const trimmed = newUrl.trim();
                                   setFormData(prev => ({
@@ -632,7 +642,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                                   }));
                                 }
                               }}
-                              className="px-2.5 py-1 bg-white/10 hover:bg-purple-600 text-white font-black uppercase text-[8px] tracking-wider rounded-xs transition-colors"
+                              className="px-3 py-2 bg-white/10 hover:bg-purple-600 text-white font-black uppercase text-[9px] tracking-wider rounded-xs transition-colors"
                             >
                               Replace URL
                             </button>
@@ -645,7 +655,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                       )
                     ) : (
                       <span className="text-white/40 uppercase">
-                        ○ Paste your ValleyFile MP3 or M4A direct URL above
+                        ○ Paste your Internet Archive MP3 or M4A URL above
                       </span>
                     )}
                   </div>
@@ -663,19 +673,19 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 </div>
 
                 <p className="text-[10px] text-white/40 uppercase font-medium">
-                  Direct ValleyFile link to audio pre-stamped with your voice tag (optional).
+                  Direct Direct link to audio pre-stamped with your voice tag (optional).
                 </p>
 
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                      ValleyFile Watermarked URL (Optional)
+                      Direct Watermarked URL (Optional)
                     </label>
                     <input 
                       type="url" 
                       value={formData.taggedAudioUrl}
                       onChange={(e) => setFormData({ ...formData, taggedAudioUrl: e.target.value, isPreTaggedUpload: Boolean(e.target.value) })}
-                      placeholder="https://valleyfile.com/download/tagged-preview.mp3"
+                      placeholder="https://custom.com/download/tagged-preview.mp3"
                       className="w-full bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
                     />
                   </div>
@@ -694,7 +704,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <Archive size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">3. Stems (ValleyFile ZIP) — Optional</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">3. Stems (Direct ZIP) — Optional</h3>
               </div>
               <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Multi-Track Archive</span>
             </div>
@@ -709,7 +719,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
               </div>
 
               <p className="text-[10px] text-white/40 uppercase font-medium">
-                Upload your multi-track stem bundle (.ZIP) manually to ValleyFile and paste the public direct link below.
+                Upload your multi-track stem bundle (.ZIP) manually to Direct and paste the public direct link below.
               </p>
 
               <div className="space-y-4">
@@ -729,19 +739,19 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                           stemZipFileName: val ? (val.split('/').pop() || 'stems.zip') : '',
                         }));
                       }}
-                      placeholder="[ Paste ValleyFile ZIP URL here ]"
+                      placeholder="[ Paste Direct ZIP URL here ]"
                       className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
                     />
                     <button
                       type="button"
                       onClick={() => {
                         if (!formData.stemsUrl) {
-                          alert('Please enter a ValleyFile ZIP URL first.');
+                          alert('Please enter a Direct ZIP URL first.');
                           return;
                         }
-                        const check = validateValleyFileUrl(formData.stemsUrl, 'stems');
+                        const check = validateStorageUrl(formData.stemsUrl, 'stems');
                         if (check.valid) {
-                          alert(`✓ ValleyFile ZIP URL saved\nFile type: ZIP\nStorage provider: ValleyFile`);
+                          alert(`✓ Direct ZIP URL saved\nFile type: ZIP\nStorage provider: Direct`);
                         } else {
                           alert(`Validation Error: ${check.error}`);
                         }
@@ -756,16 +766,16 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="text-[10px] font-mono">
                   {formData.stemsUrl ? (
                     (() => {
-                      const stemsCheck = validateValleyFileUrl(formData.stemsUrl, 'stems');
+                      const stemsCheck = validateStorageUrl(formData.stemsUrl, 'stems');
                       return stemsCheck.valid ? (
                         <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
                           <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
-                            <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ ValleyFile ZIP URL saved</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ Direct ZIP URL saved</span>
                             <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Attached</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
                             <div>File type: <span className="text-white font-bold">ZIP</span></div>
-                            <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                            <div>Storage provider: <span className="text-white font-bold">Direct</span></div>
                           </div>
                         </div>
                       ) : (
@@ -789,7 +799,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <ImageIcon size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">4. Cover Artwork (ValleyFile)</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">4. Cover Artwork (Direct)</h3>
               </div>
               <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">JPG, JPEG, PNG, WebP</span>
             </div>
@@ -812,7 +822,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="space-y-1">
                   <h4 className="text-xl font-black uppercase text-white">VALLEYFILE ARTWORK FILE URL</h4>
                   <p className="text-xs text-white/40 uppercase tracking-wider">
-                    Upload artwork manually to ValleyFile and paste the public direct URL below. Supported: JPG, JPEG, PNG, WebP.
+                    Upload artwork manually to Direct and paste the public direct URL below. Supported: JPG, JPEG, PNG, WebP.
                   </p>
                 </div>
 
@@ -826,19 +836,19 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                         type="url"
                         value={formData.artworkUrl}
                         onChange={(e) => setFormData({ ...formData, artworkUrl: e.target.value })}
-                        placeholder="[ Paste ValleyFile image URL here ]"
+                        placeholder="[ Paste Direct image URL here ]"
                         className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
                       />
                       <button
                         type="button"
                         onClick={() => {
                           if (!formData.artworkUrl) {
-                            alert('Please enter a ValleyFile artwork URL first.');
+                            alert('Please enter a Direct artwork URL first.');
                             return;
                           }
-                          const check = validateValleyFileUrl(formData.artworkUrl, 'artwork');
+                          const check = validateStorageUrl(formData.artworkUrl, 'artwork');
                           if (check.valid) {
-                            alert(`✓ ValleyFile Artwork URL saved\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: ValleyFile`);
+                            alert(`✓ Direct Artwork URL saved\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: Direct`);
                           } else {
                             alert(`Validation Error: ${check.error}`);
                           }
@@ -853,16 +863,16 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   <div className="text-[10px] font-mono">
                     {formData.artworkUrl ? (
                       (() => {
-                        const artCheck = validateValleyFileUrl(formData.artworkUrl, 'artwork');
+                        const artCheck = validateStorageUrl(formData.artworkUrl, 'artwork');
                         return artCheck.valid ? (
                           <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
                             <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
-                              <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ ValleyFile Artwork URL saved</span>
+                              <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ Direct Artwork URL saved</span>
                               <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Verified</span>
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
                               <div>File type: <span className="text-white font-bold">{artCheck.fileType?.toUpperCase() || 'JPG'}</span></div>
-                              <div>Storage provider: <span className="text-white font-bold">ValleyFile</span></div>
+                              <div>Storage provider: <span className="text-white font-bold">Direct</span></div>
                             </div>
                           </div>
                         ) : (
@@ -872,7 +882,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                         );
                       })()
                     ) : (
-                      <span className="text-white/40 uppercase">○ Paste your ValleyFile image URL above</span>
+                      <span className="text-white/40 uppercase">○ Paste your Direct image URL above</span>
                     )}
                   </div>
                 </div>
@@ -1490,7 +1500,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="space-y-1">
               <h4 className="text-xl font-black uppercase text-white">Publish Live To Catalog</h4>
               <p className="text-xs text-white/40 uppercase tracking-wider">
-                Pushes track live to storefront catalog with ValleyFile audio streaming.
+                Pushes track live to storefront catalog with Direct audio streaming.
               </p>
             </div>
 

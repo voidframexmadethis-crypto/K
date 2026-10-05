@@ -181,7 +181,7 @@ export const MarketplaceMonetization: React.FC = () => {
 
                   <div className="pt-4 border-t border-white/5 flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase text-emerald-400">ValleyFile ZIP Attached</span>
+                      <span className="text-[8px] font-black uppercase text-emerald-400">Internet Archive Pack File</span>
                       <span className="text-2xl font-black text-white">${pack.price.toFixed(2)}</span>
                     </div>
 
@@ -190,9 +190,9 @@ export const MarketplaceMonetization: React.FC = () => {
                         href={downloadUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-6 py-3 bg-white text-black hover:bg-purple-600 hover:text-white font-black uppercase text-[10px] tracking-[0.2em] transition-all flex items-center gap-2 rounded-xs"
+                        className="px-6 py-3 bg-white text-black hover:bg-purple-600 hover:text-white font-black uppercase text-[10px] tracking-[0.2em] transition-all flex items-center gap-2 rounded-xs shadow-lg"
                       >
-                        <Download size={14} /> Download ZIP
+                        Open Pack
                       </a>
                     ) : (
                       <button disabled className="px-6 py-3 bg-white/10 text-white/40 font-black uppercase text-[10px] tracking-[0.2em] rounded-xs cursor-not-allowed">

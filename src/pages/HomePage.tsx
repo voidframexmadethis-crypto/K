@@ -77,16 +77,16 @@ export const HomePage = () => {
                     <div className="flex-1 min-w-0 space-y-2 text-center md:text-left">
                       <h3 className="text-xl font-black uppercase text-white tracking-tight truncate">{pack.title}</h3>
                       <p className="text-xs text-white/50 line-clamp-2">{pack.description}</p>
-                      <div className="text-[10px] font-mono text-emerald-400 font-bold">${pack.price} · ValleyFile ZIP Attached</div>
+                      <div className="text-[10px] font-mono text-emerald-400 font-bold">${pack.price} · Internet Archive Pack File</div>
                     </div>
                     {downloadUrl ? (
                       <a 
                         href={downloadUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-6 py-3 bg-white hover:bg-purple-600 text-black hover:text-white font-black uppercase tracking-widest text-[9px] transition-colors shrink-0 flex items-center gap-2"
+                        className="px-6 py-3 bg-white hover:bg-purple-600 text-black hover:text-white font-black uppercase tracking-widest text-[9px] transition-colors shrink-0 flex items-center gap-2 rounded-xs shadow-lg"
                       >
-                        <Download size={14} /> Download ZIP
+                        Open Pack
                       </a>
                     ) : null}
                   </div>

@@ -1,11 +1,10 @@
 /**
- * KRAEZELV Storage Engine — ValleyFile Manual Link & Direct Storage Protocol
+ * KRAEZELV Storage Engine — Direct Link & Storage Protocol
  * 
- * ValleyFile direct link integration:
- * - Producer uploads master MP3/M4A/ZIP and Artwork (JPG/JPEG/PNG/WebP) manually to ValleyFile
- * - Copies the direct public ValleyFile link
+ * Direct link integration:
+ * - Producer provides master MP3/M4A/ZIP and Artwork (JPG/JPEG/PNG/WebP) direct links
  * - Direct link is validated and stored in Firestore beat/pack metadata
- * - Audio player, storefront cards, and downloads use the durable ValleyFile URL
+ * - Audio player, storefront cards, and downloads use the durable direct URL
  * 
  * WAV format is strictly and permanently prohibited.
  */
@@ -14,7 +13,7 @@ import { BeatStorageMetadata, UploadCategory } from '../types';
 
 export interface StorageAssetResult {
   assetId: string;
-  cdnUrl: string; // Durable ValleyFile / Direct HTTPS URL
+  cdnUrl: string; // Durable Direct HTTPS URL
   archiveUrl: string;
   fileName: string;
   fileSize: number;
@@ -29,14 +28,14 @@ export interface ValidationResult {
   sanitizedUrl?: string;
   category: 'audio' | 'stems' | 'artwork' | 'pack';
   fileType?: 'mp3' | 'm4a' | 'zip' | 'jpg' | 'jpeg' | 'png' | 'webp';
-  storageProvider?: 'ValleyFile';
+  storageProvider?: 'Direct';
 }
 
 /**
- * Validates a ValleyFile or direct public media URL against security and format policies.
+ * Validates a direct public media URL against security and format policies.
  * WAV format is permanently prohibited.
  */
-export function validateValleyFileUrl(
+export function validateStorageUrl(
   urlInput: string,
   category: 'audio' | 'stems' | 'artwork' | 'pack' = 'audio'
 ): ValidationResult {
@@ -46,7 +45,7 @@ export function validateValleyFileUrl(
     return {
       valid: false,
       category,
-      error: 'Please provide a valid ValleyFile Direct URL.',
+      error: 'Please provide a valid Direct File URL.',
     };
   }
 
@@ -55,7 +54,7 @@ export function validateValleyFileUrl(
     return {
       valid: false,
       category,
-      error: 'Local blob: and base64 data: URLs are temporary. Please paste a permanent public ValleyFile URL.',
+      error: 'Local blob: and base64 data: URLs are temporary. Please paste a permanent public direct URL.',
     };
   }
 
@@ -74,7 +73,7 @@ export function validateValleyFileUrl(
     return {
       valid: false,
       category,
-      error: 'The provided ValleyFile URL is not a valid web address.',
+      error: 'The provided URL is not a valid web address.',
     };
   }
 
@@ -92,7 +91,7 @@ export function validateValleyFileUrl(
     return {
       valid: false,
       category,
-      error: 'WAV format is strictly prohibited. Please upload high-resolution MP3 or M4A master files to ValleyFile.',
+      error: 'WAV format is strictly prohibited. Please upload high-resolution MP3 or M4A master files.',
     };
   }
 
@@ -155,9 +154,11 @@ export function validateValleyFileUrl(
     category,
     sanitizedUrl: trimmed,
     fileType: detectedFileType,
-    storageProvider: 'ValleyFile',
+    storageProvider: 'Direct',
   };
 }
+
+
 
 /**
  * Validates audio file name and format rules
@@ -167,7 +168,7 @@ export function validateAudioFile(file: File | string): void {
   const lower = fileName.toLowerCase();
 
   if (lower.endsWith('.wav') || (typeof file !== 'string' && file.type.includes('wav'))) {
-    throw new Error('WAV format is strictly prohibited. Please upload high-resolution MP3 or M4A files to ValleyFile.');
+    throw new Error('WAV format is strictly prohibited. Please upload high-resolution MP3 or M4A files.');
   }
 
   if (
@@ -180,9 +181,9 @@ export function validateAudioFile(file: File | string): void {
 }
 
 /**
- * Helper to build standard ValleyFile storage metadata for Firestore beats
+ * Helper to build standard storage metadata for Firestore beats
  */
-export function createValleyFileStorageMetadata(params: {
+export function createStorageMetadata(params: {
   audioUrl: string;
   fileType?: 'mp3' | 'm4a' | 'zip';
   artworkUrl?: string;
@@ -190,7 +191,7 @@ export function createValleyFileStorageMetadata(params: {
   fileName?: string;
 }): BeatStorageMetadata {
   return {
-    provider: 'valleyfile',
+    provider: 'custom',
     durableUrl: params.audioUrl,
     fileType: params.fileType || (params.audioUrl.toLowerCase().includes('.m4a') ? 'm4a' : 'mp3'),
     fileUrl: params.audioUrl,
@@ -201,22 +202,26 @@ export function createValleyFileStorageMetadata(params: {
   };
 }
 
+
+
 /**
- * Helper to build standard ValleyFile storage metadata for Firestore beat packs
+ * Helper to build standard storage metadata for Firestore beat packs
  */
-export function createValleyFilePackStorageMetadata(params: {
+export function createPackStorageMetadata(params: {
   durableUrl: string;
   artworkUrl?: string;
   fileName?: string;
 }) {
   return {
-    provider: 'valleyfile' as const,
+    provider: 'custom' as const,
     durableUrl: params.durableUrl,
     fileType: 'zip' as const,
     artworkUrl: params.artworkUrl,
     uploadedAt: new Date().toISOString(),
   };
 }
+
+
 
 /**
  * Compatibility wrapper
@@ -230,21 +235,21 @@ export async function uploadToStorage(
   const targetCategory: 'audio' | 'stems' | 'artwork' = category === 'video' ? 'audio' : category;
 
   if (typeof fileOrUrl === 'string') {
-    const validation = validateValleyFileUrl(fileOrUrl, targetCategory);
+    const validation = validateStorageUrl(fileOrUrl, targetCategory);
     if (!validation.valid) {
       throw new Error(validation.error || 'Invalid URL supplied.');
     }
 
     const cleanUrl = validation.sanitizedUrl || fileOrUrl;
     return {
-      assetId: `vf_${targetCategory}_${Date.now()}`,
+      assetId: `store_${targetCategory}_${Date.now()}`,
       cdnUrl: cleanUrl,
       archiveUrl: cleanUrl,
       fileName: cleanUrl.split('/').pop() || `${targetCategory}_asset`,
       fileSize: 0,
       mimeType: targetCategory === 'audio' ? 'audio/mpeg' : targetCategory === 'artwork' ? 'image/jpeg' : 'application/zip',
       storage: {
-        provider: 'valleyfile',
+        provider: 'custom',
         durableUrl: cleanUrl,
         fileType: ['jpg', 'jpeg', 'png', 'webp'].includes(validation.fileType as string) ? undefined : (validation.fileType as any),
         fileUrl: cleanUrl,
@@ -258,7 +263,7 @@ export async function uploadToStorage(
 
   validateAudioFile(fileOrUrl);
   throw new Error(
-    'Direct automated upload is not active. Please upload your file directly to ValleyFile and paste the direct public link.'
+    'Direct automated upload is not active. Please provide a direct public media URL.'
   );
 }
 

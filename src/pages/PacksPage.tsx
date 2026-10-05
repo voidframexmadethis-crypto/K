@@ -36,7 +36,7 @@ export const PacksPage = () => {
 
                 <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-4">
                   <div className="text-[9px] font-mono text-white/40 uppercase flex items-center gap-1">
-                    <CheckCircle size={12} className="text-emerald-400" /> ValleyFile ZIP Attached
+                    <CheckCircle size={12} className="text-emerald-400" /> Internet Archive Pack File
                   </div>
 
                   {downloadUrl ? (
@@ -44,9 +44,9 @@ export const PacksPage = () => {
                       href={downloadUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-6 py-3 bg-white hover:bg-purple-600 text-black hover:text-white font-black uppercase tracking-widest text-[9px] transition-colors flex items-center gap-2 rounded-xs"
+                      className="px-6 py-3 bg-white hover:bg-purple-600 text-black hover:text-white font-black uppercase tracking-widest text-[9px] transition-colors flex items-center gap-2 rounded-xs shadow-lg"
                     >
-                      <Download size={14} /> Download ZIP
+                      Open Pack
                     </a>
                   ) : (
                     <button

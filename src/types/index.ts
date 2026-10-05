@@ -70,7 +70,7 @@ export interface Beat {
 export type UploadCategory = 'audio' | 'artwork' | 'stems';
 
 export interface BeatStorageMetadata {
-  provider: 'valleyfile' | 'internet_archive' | 'custom';
+  provider: 'internet_archive' | 'custom';
   durableUrl: string;
   fileType?: 'mp3' | 'm4a' | 'zip';
   itemId?: string;
@@ -136,7 +136,7 @@ export interface SoundKit {
   itemCount: number;
   fileSize: string;
   storage?: {
-    provider: 'valleyfile';
+    provider: 'custom';
     durableUrl: string;
     fileType: 'zip';
     uploadedAt?: string;
@@ -153,7 +153,7 @@ export interface BeatPack {
   downloadUrl?: string;
   zipUrl?: string;
   storage?: {
-    provider: 'valleyfile';
+    provider: 'custom';
     durableUrl: string;
     fileType: 'zip';
     uploadedAt?: string;
