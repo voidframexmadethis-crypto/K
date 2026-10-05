@@ -38,7 +38,7 @@ import {
   generateIAItemId,
   executeIAUpload,
 } from './src/lib/internetArchiveCore.ts';
-import { handleInternetArchiveUpload } from './src/api/storage/internet-archive/upload.ts';
+import handleInternetArchiveUpload from './api/storage/internet-archive/upload.ts';
 
 // Load environment variables
 dotenv.config();
