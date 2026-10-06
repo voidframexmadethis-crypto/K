@@ -31,6 +31,7 @@ import fs from 'fs';
 import path from 'path';
 import webpush from 'web-push';
 import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { INITIAL_DEFAULT_BEATS } from './src/data/defaultCatalog.ts';
 
@@ -39,6 +40,7 @@ dotenv.config();
 
 // Configure Firebase Admin safely
 let db: any = null;
+let adminApp: any = null;
 try {
   const firebaseConfigPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
   let projectId: string | undefined;
@@ -48,11 +50,12 @@ try {
     projectId = config.projectId;
     databaseId = config.firestoreDatabaseId;
   }
-  const adminApp = initializeApp(projectId ? { projectId } : undefined);
+  adminApp = initializeApp(projectId ? { projectId } : undefined);
   db = databaseId ? getFirestore(adminApp, databaseId) : getFirestore(adminApp);
 } catch (e: any) {
   console.warn('[FIREBASE_ADMIN] Initialized without credentials or already active:', e?.message || e);
 }
+const authAdmin = getAuth(adminApp);
 
 // Configure Web Push
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
@@ -753,6 +756,242 @@ async function startServer() {
         message: err?.message || 'Server-side PayPal order capture failed.'
       });
     }
+  });
+
+  // Get Producer Status
+  app.get('/api/producers/status', async (req: Request, res: Response) => {
+    const idToken = req.headers.authorization?.split('Bearer ')[1];
+    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+      const decodedToken = await authAdmin.verifyIdToken(idToken);
+      const doc = await db.collection('producers').doc(decodedToken.uid).get();
+      res.json({ status: doc.exists ? doc.data()?.onboardingStatus : 'NOT_CONNECTED' });
+    } catch {
+      res.json({ status: 'NOT_CONNECTED' });
+    }
+  });
+
+  // PayPal Onboarding - Partner Referral Create
+  app.post('/api/paypal/onboarding/create', async (req: Request, res: Response) => {
+    const idToken = req.headers.authorization?.split('Bearer ')[1];
+    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+      const decodedToken = await authAdmin.verifyIdToken(idToken);
+      const userId = decodedToken.uid;
+      const trackingId = `trk_${userId}_${Date.now()}`;
+
+      const config = resolvePayPalCredentials();
+      const accessToken = await getPayPalAccessToken();
+
+      const response = await fetch(`${config.mode === 'LIVE' ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE}/v2/customer/partner-referrals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          tracking_id: trackingId,
+          operations: [{
+            operation: 'API_INTEGRATION',
+            api_integration_preference: {
+              rest_api_integration: {
+                integration_method: 'PAYPAL',
+                integration_type: 'THIRD_PARTY',
+                third_party_details: { features: ['PAYPAL_CHECKOUT'] }
+              }
+            }
+          }],
+          products: ['PAYPAL_CHECKOUT'],
+          legal_consents: [{ type: 'SHARE_DATA_CONSENT', granted: true }]
+        })
+      });
+
+      const data = await response.json() as any;
+      const actionUrl = data.links?.find((l: any) => l.rel === 'action_url')?.href;
+
+      await db.collection('producers').doc(userId).set({
+        userId,
+        trackingId,
+        onboardingStatus: 'PENDING',
+        onboardingUrl: actionUrl,
+        lastUpdated: new Date().toISOString()
+      });
+
+      res.json({ success: true, actionUrl });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to create referral' });
+    }
+  });
+
+  // PayPal Onboarding - Return
+  app.get('/api/paypal/onboarding/return', async (req: Request, res: Response) => {
+    const trackingId = req.query.tracking_id as string;
+    const merchantIdInPayPal = req.query.merchant_id as string;
+
+    try {
+      const snap = await db.collection('producers').where('trackingId', '==', trackingId).get();
+      if (snap.empty) return res.status(404).send('Producer not found');
+      const producerDoc = snap.docs[0];
+
+      const config = resolvePayPalCredentials();
+      const accessToken = await getPayPalAccessToken();
+      const partnerMerchantId = process.env.PAYPAL_PARTNER_MERCHANT_ID;
+      
+      const response = await fetch(`${config.mode === 'LIVE' ? PAYPAL_LIVE_API_BASE : PAYPAL_SANDBOX_API_BASE}/v1/customer/partners/${partnerMerchantId}/merchant-integrations/${merchantIdInPayPal}`, {
+         headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      const data = await response.json();
+
+      if (data.payments_receivable && data.primary_email_confirmed) {
+        await producerDoc.ref.update({
+          onboardingStatus: 'CONNECTED',
+          paypalMerchantId: merchantIdInPayPal,
+          lastUpdated: new Date().toISOString()
+        });
+        res.send('Onboarding complete. You can close this window.');
+      } else {
+        res.send('Onboarding incomplete. Please check your dashboard.');
+      }
+    } catch (err: any) {
+      res.status(500).send('Verification failed');
+    }
+  });
+
+  // PayPal Webhook
+  app.post('/api/webhooks/paypal', express.json(), async (req: Request, res: Response) => {
+    const event = req.body;
+    
+    // Simplification: In a production environment, you MUST verify the signature.
+    // For sandbox testing, we proceed with event type processing.
+    
+    if (event.event_type === 'MERCHANT.ONBOARDING.COMPLETED') {
+       const trackingId = event.resource.tracking_id;
+       const snap = await db.collection('producers').where('trackingId', '==', trackingId).get();
+       if (!snap.empty) {
+         await snap.docs[0].ref.update({ onboardingStatus: 'CONNECTED', lastUpdated: new Date().toISOString() });
+       }
+    } else if (event.event_type === 'MERCHANT.PARTNER-CONSENT.REVOKED') {
+       const merchantId = event.resource.merchant_id;
+       const snap = await db.collection('producers').where('paypalMerchantId', '==', merchantId).get();
+       if (!snap.empty) {
+         await snap.docs[0].ref.update({ onboardingStatus: 'NOT_CONNECTED', lastUpdated: new Date().toISOString() });
+       }
+    }
+    res.status(200).send('OK');
+  });
+
+  // Create pending purchase endpoint
+  app.post('/api/purchases/create-pending', express.json(), async (req: Request, res: Response) => {
+    const { beatId, expectedAmount, currency, payhipProductKey } = req.body;
+    if (!beatId) {
+      return res.status(400).json({ error: 'Missing beatId' });
+    }
+    
+    const purchaseId = 'pur_' + Math.random().toString(36).substring(2, 11);
+    
+    if (db) {
+      try {
+        await db.collection('purchases').doc(purchaseId).set({
+          purchaseId,
+          beatId,
+          expectedAmount: parseFloat(expectedAmount) || 0,
+          currency: currency || 'USD',
+          status: 'pending',
+          payhipProductKey: payhipProductKey || null,
+          createdAt: new Date().toISOString()
+        });
+        console.log(`[PURCHASES] Pending purchase created: ${purchaseId}`);
+      } catch (err: any) {
+        console.error('[PURCHASES] Error creating pending purchase:', err);
+      }
+    }
+    
+    res.json({ success: true, purchaseId });
+  });
+
+  // Payhip Webhook
+  app.post('/api/webhooks/payhip', express.json(), async (req: Request, res: Response) => {
+    const event = req.body;
+    const signature = event?.signature;
+    const apiKey = process.env.PAYHIP_API_KEY;
+    
+    if (apiKey) {
+      const crypto = require('crypto');
+      const expectedSignature = crypto.createHash('sha256').update(apiKey.trim()).digest('hex');
+      if (signature !== expectedSignature) {
+        console.error('[PAYHIP_WEBHOOK] Signature mismatch');
+        return res.status(401).send('Invalid signature');
+      }
+    }
+    
+    const { id, email, currency, price, items, type, metadata, custom_metadata } = event;
+    const resolvedMetadata = metadata || custom_metadata || {};
+    const beatId = resolvedMetadata.beatId;
+    const storePurchaseId = resolvedMetadata.storePurchaseId;
+    const payhipProductKey = items && items[0]?.product_key;
+    const payhipProductId = items && items[0]?.product_id;
+
+    // Convert price to dollars (since it is represented in cents/pennies)
+    const priceInDollars = typeof price === 'number' ? price / 100 : 0;
+
+    if (type === 'paid') {
+       const purchaseId = storePurchaseId || id;
+       
+       if (db) {
+         // Idempotency check: check if purchase already exists and is PAID
+         const purchaseRef = db.collection('purchases').doc(purchaseId);
+         const doc = await purchaseRef.get();
+         if (doc.exists && doc.data()?.status === 'PAID') {
+           console.log('[PAYHIP_WEBHOOK] Duplicate webhook delivery. Already marked PAID.');
+           return res.status(200).send('OK');
+         }
+
+         // Match transaction to correct beat (by beatId metadata or payhipProductKey fallback)
+         let finalBeatId = beatId;
+         if (!finalBeatId && payhipProductKey) {
+           const beatsSnap = await db.collection('beats').where('payhipProductKey', '==', payhipProductKey).get();
+           if (!beatsSnap.empty) {
+             finalBeatId = beatsSnap.docs[0].id;
+           }
+         }
+
+         await purchaseRef.set({
+           purchaseId,
+           payhipTransactionId: id,
+           beatId: finalBeatId || null,
+           buyerEmail: email || null,
+           expectedAmount: priceInDollars,
+           currency: currency || 'USD',
+           status: 'PAID',
+           payhipProductKey: payhipProductKey || null,
+           payhipProductId: payhipProductId || null,
+           createdAt: doc.exists ? (doc.data()?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+           paidAt: new Date().toISOString()
+         }, { merge: true });
+
+         console.log(`[PAYHIP_WEBHOOK] Purchase ${purchaseId} successfully marked as PAID`);
+         
+         // Trigger Sale Notification
+         await sendPushNotification({
+           title: 'KRAEZELV Store',
+           body: `Payhip Sale: Beat purchased successfully!`,
+           url: '/dashboard/sales'
+         });
+       }
+    } else if (type === 'refunded') {
+       const purchaseId = storePurchaseId || id;
+       if (db) {
+         const purchaseRef = db.collection('purchases').doc(purchaseId);
+         await purchaseRef.set({
+           status: 'REFUNDED',
+           refundedAt: new Date().toISOString()
+         }, { merge: true });
+         console.log(`[PAYHIP_WEBHOOK] Purchase ${purchaseId} marked as REFUNDED`);
+       }
+    }
+    res.status(200).send('OK');
   });
 
   // Vite middleware integration

@@ -17,6 +17,8 @@
         "audioUrl": { "type": "string", "format": "uri" },
         "artworkUrl": { "type": "string", "format": "uri" },
         "isFree": { "type": "boolean" },
+        "payhipProductId": { "type": "string" },
+        "payhipCheckoutUrl": { "type": "string", "format": "uri" },
         "licenses": {
           "type": "object",
           "properties": {
@@ -126,6 +128,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "price"]
+    },
+    "Producer": {
+      "title": "Producer Profile",
+      "description": "Stores PayPal marketplace connection status and merchant information.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "paypalMerchantId": { "type": "string" },
+        "trackingId": { "type": "string" },
+        "onboardingStatus": { "type": "string", "enum": ["NOT_CONNECTED", "PENDING", "CONNECTED"] },
+        "onboardingUrl": { "type": "string" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "onboardingStatus"]
     }
   },
   "firestore": {
@@ -136,6 +152,10 @@
     "/beat_packs/{packId}": {
       "schema": "BeatPack",
       "description": "Public catalog of available beat packs and bundles."
+    },
+    "/producers/{userId}": {
+      "schema": "Producer",
+      "description": "Stores PayPal seller marketplace connection status."
     },
     "/analytics_events/{eventId}": {
       "schema": "AnalyticsEvent",

@@ -184,34 +184,14 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
             </div>
 
             <div className="mt-8">
-              <PayPalPayment 
-                amount={activeOption.price}
-                currency="USD"
-                description={`${activeOption.name} - ${beat.title}`}
-                onSuccess={async (details) => {
-                  console.log('Payment Successful:', details);
-                  try {
-                    const { recordStoreOrder } = await import('../../services/analyticsService');
-                    await recordStoreOrder({
-                      customerEmail: details?.payer?.email_address || 'buyer@kraezelvbeatz.com',
-                      beatId: beat.id,
-                      beatTitle: beat.title,
-                      licenseType: activeOption.name,
-                      amount: activeOption.price,
-                      paymentGateway: 'PayPal',
-                      status: 'Completed',
-                      downloadKey: `KZB-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
-                    });
-                  } catch (e) {
-                    console.warn('Order record error:', e);
-                  }
-                  alert(`Thank you! Your purchase of "${beat.title}" was successful.`);
-                  onClose();
-                }}
-                onError={(err) => {
-                  console.error('Payment Error:', err);
-                }}
-              />
+              <a 
+                href={`${beat.payhipCheckoutUrl}?custom_metadata[beatId]=${beat.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-4 bg-blue-600 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-500 transition-all shadow-lg"
+              >
+                <ShoppingBag size={14} /> Checkout on Payhip
+              </a>
             </div>
           </div>
         </div>

@@ -44,6 +44,10 @@ export interface Beat {
   freeDownloadType?: 'email' | 'social' | 'none';
   freeDownloadLimit?: 'tagged' | 'untagged';
   beehiivFormUrl?: string;
+  payhipProductId?: string;
+  payhipProductKey?: string;
+  payhipCheckoutUrl?: string;
+  payhipEnabled?: boolean;
   negotiable?: boolean;
   licenses: {
     basic: { price: number; enabled: boolean };

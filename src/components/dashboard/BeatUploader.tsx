@@ -100,6 +100,10 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     directPrice: '49.99',
     directPriceLabel: 'Direct Track Buyout',
     directCheckoutUrl: '',
+    payhipProductId: editingBeat?.payhipProductId || '',
+    payhipProductKey: editingBeat?.payhipProductKey || '',
+    payhipCheckoutUrl: editingBeat?.payhipCheckoutUrl || '',
+    payhipEnabled: editingBeat?.payhipEnabled || false,
     isFreeDownload: false,
     freeDownloadEmailRequired: false,
     beehiivFormUrl: BEEHIIV_CONFIG.FORM_ACTION_URL,
@@ -353,6 +357,8 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
         freeDownloadType: (formData.freeDownloadEmailRequired ? 'email' : 'none') as 'email' | 'social' | 'none',
         beehiivFormUrl: formData.beehiivFormUrl || '',
+        payhipProductId: formData.payhipProductId || undefined,
+        payhipCheckoutUrl: formData.payhipCheckoutUrl || undefined,
         playsCount: 0,
         licenses: formData.pricingMode === 'direct' ? {
           basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
@@ -909,7 +915,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         )}
 
         {/* 5. PRICING SECTION (TIERED VS DIRECT CUSTOM PRICING) */}
-        {(activeSection === 5 || activeSection === 8) && (
+        { (activeSection === 5 || activeSection === 8) && (
           <div className="p-8 bg-neutral-950 border border-white/10 rounded-sm space-y-8">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
@@ -1044,6 +1050,29 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Direct Single Buyout Pricing</span>
                   <span className="text-[9px] font-mono text-emerald-300 uppercase">License Tiers Bypassed</span>
                 </div>
+                
+                <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase tracking-widest text-emerald-300/60 block">Payhip Product ID</label>
+                        <input
+                            type="text"
+                            value={formData.payhipProductId}
+                            onChange={(e) => setFormData({ ...formData, payhipProductId: e.target.value })}
+                            className="w-full bg-black border border-emerald-500/30 p-2 text-xs font-mono text-white"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase tracking-widest text-emerald-300/60 block">Payhip Checkout URL</label>
+                        <input
+                            type="url"
+                            value={formData.payhipCheckoutUrl}
+                            onChange={(e) => setFormData({ ...formData, payhipCheckoutUrl: e.target.value })}
+                            className="w-full bg-black border border-emerald-500/30 p-2 text-xs font-mono text-white"
+                        />
+                    </div>
+                </div>
+              </div>
+            )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -1251,8 +1280,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 </div>
               </div>
             )}
-          </div>
-        )}
+
 
         {/* 6. METADATA SECTION */}
         {(activeSection === 6 || activeSection === 8) && (
@@ -1566,8 +1594,8 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
 };
+

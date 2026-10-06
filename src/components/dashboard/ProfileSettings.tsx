@@ -24,6 +24,7 @@ import {
   Camera
 } from 'lucide-react';
 import { uploadToR2AndArchive } from '../../lib/storageEngine';
+import { PayPalConnectionArea } from './PayPalConnectionArea';
 
 export const ProfileSettings = () => {
   // State for Producer Profile Settings
@@ -490,7 +491,10 @@ export const ProfileSettings = () => {
         </div>
       </div>
 
-      {/* 4. TUBEBUDDY & VIDIQ SEO VIDEO SUITE INTEGRATION */}
+      {/* 4. PAYPAL INTEGRATION */}
+      <PayPalConnectionArea />
+
+      {/* 5. TUBEBUDDY & VIDIQ SEO VIDEO SUITE INTEGRATION */}
       <div className="p-8 bg-neutral-950 border border-white/10 rounded-sm space-y-8">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">

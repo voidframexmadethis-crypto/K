@@ -127,11 +127,36 @@ export const PremiumBeatCard = ({ beat, variant = 'default' }: { beat: Beat, var
              onClick={(e) => {
                e.preventDefault();
                e.stopPropagation();
-               setIsLicensingOpen(true);
+               if (beat.payhipEnabled && beat.payhipProductKey) {
+                  fetch('/api/purchases/create-pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      beatId: beat.id,
+                      expectedAmount: beat.licenses?.basic?.price || 29.99,
+                      currency: 'USD',
+                      payhipProductKey: beat.payhipProductKey
+                    })
+                  })
+                  .then(res => res.json())
+                  .then(data => {
+                    const purchaseId = data.purchaseId;
+                    let checkoutUrl = `https://payhip.com/buy?link=${beat.payhipProductKey}&metadata[beatId]=${beat.id}`;
+                    if (purchaseId) {
+                      checkoutUrl += `&metadata[storePurchaseId]=${purchaseId}`;
+                    }
+                    window.location.href = checkoutUrl;
+                  })
+                  .catch(() => {
+                    window.location.href = `https://payhip.com/buy?link=${beat.payhipProductKey}&metadata[beatId]=${beat.id}`;
+                  });
+                } else {
+                  setIsLicensingOpen(true);
+                }
              }}
              className="py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.4em] hover:bg-neutral-200 transition-colors flex items-center justify-center gap-2 cursor-pointer"
            >
-             <ShoppingCart size={14} /> License ${beat.licenses?.basic?.price || '29.99'}
+             <ShoppingCart size={14} /> {beat.payhipEnabled ? 'Buy Now' : `License $${beat.licenses?.basic?.price || '29.99'}`}
            </button>
         </div>
       </div>

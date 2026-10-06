@@ -31,6 +31,12 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn();
     }
 
+    // Producers Collection (Marketplace Marketplace connection)
+    match /producers/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Trusted server-side only
+    }
+
     // Analytics Events Collection
     match /analytics_events/{eventId} {
       allow read: if isSignedIn();
