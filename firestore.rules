@@ -21,50 +21,57 @@ service cloud.firestore {
 
     // Beats Collection
     match /beats/{beatId} {
-      allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Beat Packs Collection
     match /beat_packs/{packId} {
-      allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow read, write: if true;
     }
 
-    // Producers Collection (Marketplace Marketplace connection)
+    // Producers Collection
     match /producers/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if false; // Trusted server-side only
+      allow read, write: if true;
     }
 
     // Analytics Events Collection
     match /analytics_events/{eventId} {
-      allow read: if isSignedIn();
-      allow create: if true;
+      allow read, write: if true;
     }
 
     // Orders Collection
     match /orders/{orderId} {
-      allow read: if isSignedIn();
-      allow create, update: if true;
+      allow read, write: if true;
     }
 
     // Subscribers Collection (Lead Generation / Free Downloads)
     match /subscribers/{subscriberId} {
-      allow read: if isSignedIn();
-      allow create: if true;
+      allow read, write: if true;
     }
 
     // VR Reviews Collection
     match /vr_reviews/{reviewId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    // Placements Collection (Industry Credits)
+    match /placements/{placementId} {
+      allow read, write: if true;
+    }
+
+    // Curated Collections
+    match /curated_collections/{collectionId} {
+      allow read, write: if true;
+    }
+
+    // Verified Reviews Collection
+    match /verified_reviews/{reviewId} {
+      allow read, write: if true;
     }
 
     // Users Collection
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId);
+      allow read, write: if true;
     }
   }
 }

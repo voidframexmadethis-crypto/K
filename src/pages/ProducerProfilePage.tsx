@@ -25,6 +25,8 @@ import {
 import { useBeatCatalogStore } from '../store/useBeatCatalogStore';
 import { BeatCard } from '../components/beats/BeatCard';
 import { BeatShareModal } from '../components/player/BeatShareModal';
+import { PlacementShowcase } from '../components/home/PlacementShowcase';
+import { VerifiedReviewsSection } from '../components/beats/VerifiedReviewsSection';
 
 export const ProducerProfilePage = () => {
   const { beats } = useBeatCatalogStore();
@@ -278,7 +280,7 @@ export const ProducerProfilePage = () => {
           {/* Beat Cards Grid */}
           {filteredBeats.length === 0 ? (
             <div className="py-20 text-center text-white/30 text-xs uppercase tracking-widest border border-white/5 bg-white/[0.01]">
-              No beats match your search criteria.
+              No beats uploaded yet. Use the Producer Command Center to upload official KRAEZELV beats.
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -288,6 +290,12 @@ export const ProducerProfilePage = () => {
             </div>
           )}
         </div>
+
+        {/* VERIFIED PLACEMENTS SHOWCASE */}
+        <PlacementShowcase />
+
+        {/* VERIFIED CUSTOMER REVIEWS */}
+        <VerifiedReviewsSection />
 
       </div>
     </div>

@@ -13,6 +13,8 @@ interface AudioState {
   isShuffle: boolean;
   repeatMode: 'none' | 'one' | 'all';
   isQueueOpen: boolean;
+  playbackSpeed: number;
+  isRadioMode: boolean;
 }
 
 interface AudioStore extends AudioState {
@@ -32,6 +34,8 @@ interface AudioStore extends AudioState {
   toggleQueue: () => void;
   clearQueue: () => void;
   removeFromQueue: (id: string) => void;
+  setPlaybackSpeed: (speed: number) => void;
+  setRadioMode: (active: boolean) => void;
 }
 
 export const useAudioStore = create<AudioStore>((set) => ({
@@ -46,6 +50,8 @@ export const useAudioStore = create<AudioStore>((set) => ({
   isShuffle: false,
   repeatMode: 'none',
   isQueueOpen: false,
+  playbackSpeed: 1.0,
+  isRadioMode: false,
 
   setBeat: (beat) => {
     // Dynamically log analytics event
@@ -118,4 +124,6 @@ export const useAudioStore = create<AudioStore>((set) => ({
   removeFromQueue: (id) => set((state) => ({ 
     queue: state.queue.filter(b => b.id !== id) 
   })),
+  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
+  setRadioMode: (active) => set({ isRadioMode: active }),
 }));

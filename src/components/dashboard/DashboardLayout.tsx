@@ -12,6 +12,7 @@ function cn(...inputs: ClassValue[]) {
 const menuItems = [
   { name: 'Overview', icon: LayoutDashboard, href: '/dashboard' },
   { name: 'Music Library', icon: Music, href: '/dashboard/music' },
+  { name: 'Curated Playlists', icon: Sparkles, href: '/dashboard/playlists' },
   { name: 'Remove Beats from Player', icon: VolumeX, href: '/dashboard/remove-beats' },
   { name: 'Sales & Ledger', icon: ShoppingCart, href: '/dashboard/sales' },
   { name: 'Analytics Engine', icon: BarChart3, href: '/dashboard/analytics' },

@@ -14,12 +14,17 @@ import { cn } from '../../lib/utils';
 
 function getPlayableAudioUrl(rawUrl: string): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
-  const trimmed = rawUrl.trim();
+  let trimmed = rawUrl.trim();
   if (!trimmed) return '';
 
   // Rewrite Internet Archive details page links to direct download/stream links
   if (trimmed.includes('archive.org/details/')) {
-    return trimmed.replace('archive.org/details/', 'archive.org/download/');
+    trimmed = trimmed.replace('archive.org/details/', 'archive.org/download/');
+  }
+
+  // If it's an external URL (such as Internet Archive), route it through our CORS-compliant server proxy to satisfy the Web Audio API's strict CORS rules and ensure seamless browser playback
+  if (trimmed.startsWith('http') && !trimmed.includes(window.location.host)) {
+    return `/api/audio/proxy?url=${encodeURIComponent(trimmed)}`;
   }
 
   return trimmed;
@@ -44,6 +49,111 @@ export const PersistentPlayer = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [activeDspPreset, setActiveDspPreset] = useState<MasterPresetId>('streaming');
   const [showDspMenu, setShowDspMenu] = useState(false);
+
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [showRemainingTime, setShowRemainingTime] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const visualizerRef = useRef<HTMLCanvasElement | null>(null);
+  const [meterData, setMeterData] = useState({ inputPeakDb: -60, outputPeakDb: -60, isClipping: false });
+
+  // Update speed in real HTML audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed, currentBeat?.id]);
+
+  // Keyboard Shortcuts Hook
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' || 
+        document.activeElement?.tagName === 'SELECT' || 
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        setVolume(volume === 0 ? 0.8 : 0);
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        if (audioRef.current) {
+          audioRef.current.currentTime = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 10);
+        }
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        if (audioRef.current) {
+          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlay, volume, setVolume]);
+
+  // Real-time Canvas spectrum visualizer
+  useEffect(() => {
+    const canvas = visualizerRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let frameId: number;
+    const array = new Uint8Array(32); // 32 frequency bands
+
+    const render = () => {
+      frameId = requestAnimationFrame(render);
+      import('../../lib/hiFiAudioEngine').then(({ hiFiAudioEngine }) => {
+        hiFiAudioEngine.getByteFrequencyData(array);
+        const w = canvas.width = 120;
+        const h = canvas.height = 36;
+        ctx.clearRect(0, 0, w, h);
+
+        const barWidth = w / array.length;
+        for (let i = 0; i < array.length; i++) {
+          const val = array[i] / 255;
+          const barHeight = val * h * 0.9;
+          
+          // Draw a luxurious subtle glowing gradient block
+          ctx.fillStyle = `rgba(168, 85, 247, ${0.1 + val * 0.9})`;
+          ctx.fillRect(i * barWidth, h - barHeight, barWidth - 1.5, barHeight);
+          
+          // High-fashion accent top line
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(i * barWidth, h - barHeight, barWidth - 1.5, 1);
+        }
+      }).catch(() => {});
+    };
+
+    if (isPlaying) {
+      render();
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    return () => cancelAnimationFrame(frameId);
+  }, [isPlaying, currentBeat?.id]);
+
+  // Dynamic VU Peak level extraction
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      import('../../lib/hiFiAudioEngine').then(({ hiFiAudioEngine }) => {
+        const data = hiFiAudioEngine.getMeterData();
+        setMeterData({
+          inputPeakDb: data.inputPeakDb,
+          outputPeakDb: data.outputPeakDb,
+          isClipping: data.isClipping
+        });
+      }).catch(() => {});
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isPlaying]);
 
   // Runtime Audio Diagnostic Reporter conforming strictly to Step 8
   const logAudioDiagnostic = (label: string, extra?: { requestStatus?: string; cspBlocked?: boolean; error?: any }) => {
@@ -133,17 +243,15 @@ export const PersistentPlayer = () => {
       // 4. Trigger explicit load
       audio.load();
 
-      // 5. Initialize Web Audio DSP Engine
-      try {
-        hiFiAudioEngine.initialize(audio);
-      } catch (e) {
-        console.warn('[AUDIO_PLAYER] DSP Engine Init note:', e);
-      }
-
-      // 6. Safe play when ready
+      // 5. Defer AudioContext & Node initialization until the user actually plays
       const playWhenReady = () => {
         if (useAudioStore.getState().isPlaying) {
-          hiFiAudioEngine.resume();
+          try {
+            hiFiAudioEngine.initialize(audio);
+            hiFiAudioEngine.resume();
+          } catch (e) {
+            console.warn('[AUDIO_PLAYER] DSP Engine Init note:', e);
+          }
           audio.play().catch((err: any) => {
             console.warn('[AUDIO_PLAYER] Deferred play error:', err?.message || err);
             setPlaying(false);
@@ -165,7 +273,12 @@ export const PersistentPlayer = () => {
     } else {
       // Toggle play/pause on current track
       if (isPlaying) {
-        hiFiAudioEngine.resume();
+        try {
+          hiFiAudioEngine.initialize(audio);
+          hiFiAudioEngine.resume();
+        } catch (e) {
+          console.warn('[AUDIO_PLAYER] DSP Engine Init note:', e);
+        }
         if (audio.readyState < 2) {
           const handleCanPlay = () => {
             audio.removeEventListener('canplay', handleCanPlay);
@@ -319,15 +432,17 @@ export const PersistentPlayer = () => {
       <div className="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-2xl border-t border-white/10 z-[200] py-3 shadow-[0_-20px_80px_rgba(0,0,0,0.9)]">
         <audio
           ref={audioRef}
+          crossOrigin="anonymous"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={() => {
             handleLoadedMetadata();
             logAudioDiagnostic('LOADED_METADATA');
           }}
-          onCanPlay={() => logAudioDiagnostic('CAN_PLAY')}
-          onPlay={() => logAudioDiagnostic('PLAY')}
-          onPlaying={() => logAudioDiagnostic('PLAYING')}
-          onPause={() => logAudioDiagnostic('PAUSE')}
+          onCanPlay={() => { setIsBuffering(false); logAudioDiagnostic('CAN_PLAY'); }}
+          onPlay={() => { setIsBuffering(false); logAudioDiagnostic('PLAY'); }}
+          onPlaying={() => { setIsBuffering(false); logAudioDiagnostic('PLAYING'); }}
+          onWaiting={() => setIsBuffering(true)}
+          onPause={() => { setIsBuffering(false); logAudioDiagnostic('PAUSE'); }}
           onError={(e) => {
             handleAudioError(e);
             logAudioDiagnostic('AUDIO_ERROR', { error: audioRef.current?.error });
@@ -338,23 +453,47 @@ export const PersistentPlayer = () => {
         <div className="max-w-[1800px] mx-auto px-6 md:px-12 grid grid-cols-12 gap-6 items-center">
           {/* Track Info & DSP Engine Selector */}
           <div className="col-span-3 flex items-center gap-5 min-w-0">
-            <div className="relative group overflow-hidden shrink-0">
+            <div 
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="relative group overflow-hidden shrink-0 cursor-pointer"
+              title="Click to expand/inspect studio analytics"
+            >
               <img 
                 src={currentBeat.artworkUrl} 
                 alt={currentBeat.title}
-                className="w-14 h-14 md:w-16 md:h-16 object-cover bg-neutral-900 border border-white/10 grayscale"
+                className="w-14 h-14 md:w-16 md:h-16 object-cover bg-neutral-900 border border-white/10 grayscale hover:scale-105 transition-transform duration-300"
               />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[8px] font-black uppercase text-white tracking-widest text-center">
+                Expand
+              </div>
             </div>
 
             <div className="min-w-0 flex flex-col gap-1">
-              <h4 className="text-base md:text-lg font-black text-white truncate uppercase tracking-tighter leading-tight">
-                {currentBeat.title}
-              </h4>
+              <div className="flex items-center gap-2 min-w-0">
+                <h4 className="text-base md:text-lg font-black text-white truncate uppercase tracking-tighter leading-tight">
+                  {currentBeat.title}
+                </h4>
+                {isPlaying && (
+                  <div className="flex items-end gap-0.5 h-3 shrink-0">
+                    <div className="w-0.5 bg-purple-500 animate-[bounce_1s_infinite] h-full" style={{ animationDelay: '0.1s' }} />
+                    <div className="w-0.5 bg-purple-400 animate-[bounce_0.8s_infinite] h-full" style={{ animationDelay: '0.3s' }} />
+                    <div className="w-0.5 bg-white animate-[bounce_1.2s_infinite] h-full" style={{ animationDelay: '0.5s' }} />
+                    <div className="w-0.5 bg-purple-400 animate-[bounce_0.9s_infinite] h-full" style={{ animationDelay: '0.2s' }} />
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center gap-2 text-[8px] md:text-[9px] text-white/40 font-bold uppercase tracking-[0.15em] truncate">
                 <span>{currentBeat.producerId}</span>
                 <span className="w-px h-2 bg-white/10" />
                 <span>{currentBeat.bpm} BPM</span>
+                <span className="w-px h-2 bg-white/10" />
+                <span className="text-purple-400 font-black animate-pulse">HQ 24-BIT</span>
+              </div>
+
+              {/* Web Audio Analyser spectrum visualizer canvas */}
+              <div className="mt-1 hidden sm:block">
+                <canvas ref={visualizerRef} className="w-[120px] h-6 opacity-40 hover:opacity-100 transition-opacity bg-white/[0.02] border border-white/5" />
               </div>
 
               {/* Master Audio DSP Mode Indicator Badge & Playback Error Indicator */}
@@ -397,20 +536,24 @@ export const PersistentPlayer = () => {
                 <SkipBack size={20} />
               </button>
               
-              <button 
-                onClick={togglePlay}
-                className="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95"
-              >
-                {isPlaying ? (
-                  <div className="flex gap-1 items-end h-4">
-                     <div className="w-1 h-3 bg-black animate-pulse" />
-                     <div className="w-1 h-4 bg-black animate-pulse delay-75" />
-                     <div className="w-1 h-2 bg-black animate-pulse delay-150" />
-                  </div>
-                ) : (
-                  <Play size={20} fill="black" className="ml-0.5" />
-                )}
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={togglePlay}
+                  className="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95 cursor-pointer"
+                >
+                  {isBuffering ? (
+                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  ) : isPlaying ? (
+                    <div className="flex gap-1 items-end h-4">
+                       <div className="w-1 h-3 bg-black animate-pulse" />
+                       <div className="w-1 h-4 bg-black animate-pulse delay-75" />
+                       <div className="w-1 h-2 bg-black animate-pulse delay-150" />
+                    </div>
+                  ) : (
+                    <Play size={20} fill="black" className="ml-0.5" />
+                  )}
+                </button>
+              </div>
               
               <button onClick={next} className="text-white/40 hover:text-white transition-colors">
                 <SkipForward size={20} />
@@ -426,8 +569,12 @@ export const PersistentPlayer = () => {
             
             {/* Digital Waveform Progress Tracker */}
             <div className="w-full flex items-center gap-4">
-              <span className="text-[9px] font-black tabular-nums text-white/40 min-w-[36px] text-right">
-                {formatTime(progress)}
+              <span 
+                onClick={() => setShowRemainingTime(!showRemainingTime)} 
+                className="text-[9px] font-black tabular-nums text-white/40 hover:text-white transition-colors cursor-pointer select-none min-w-[36px] text-right"
+                title="Toggle elapsed/remaining time"
+              >
+                {showRemainingTime ? `-${formatTime(Math.max(0, duration - progress))}` : formatTime(progress)}
               </span>
 
               {/* Scrubbable Waveform Display */}
@@ -449,7 +596,7 @@ export const PersistentPlayer = () => {
                       key={i}
                       className={cn(
                         "flex-1 transition-all duration-150 rounded-full",
-                        isPlayed ? "bg-white" : "bg-white/10 group-hover:bg-white/20"
+                        isPlayed ? "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.7)]" : "bg-white/10 group-hover:bg-white/20"
                       )}
                       style={{ height: `${height}%` }}
                     />
@@ -465,6 +612,15 @@ export const PersistentPlayer = () => {
 
           {/* Secondary Utilities, Free Download & Paid Licensing */}
           <div className="col-span-3 flex items-center justify-end gap-3 md:gap-4">
+            {/* Playback speed control */}
+            <button 
+              onClick={() => setPlaybackSpeed(prev => prev === 1 ? 1.25 : prev === 1.25 ? 0.75 : 1)}
+              className="px-2.5 py-1.5 border border-white/10 hover:border-white/20 bg-white/5 text-[8px] font-black uppercase tracking-widest rounded-sm text-white/60 hover:text-white transition-all shrink-0 cursor-pointer"
+              title="Toggle playback speed (0.75x / 1x / 1.25x)"
+            >
+              {playbackSpeed}x Speed
+            </button>
+
             {/* Volume Control */}
             <div className="hidden xl:flex items-center gap-2 group">
               <Volume2 size={16} className="text-white/40 group-hover:text-white transition-colors" />
@@ -532,6 +688,50 @@ export const PersistentPlayer = () => {
           </div>
         </div>
       </div>
+
+      {/* Studio Analytics Expanded Inspector Panel */}
+      {isExpanded && (
+        <div className="fixed bottom-[96px] left-6 bg-black/98 backdrop-blur-3xl border border-white/15 p-6 w-80 shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[210] flex flex-col gap-4 animate-in slide-in-from-bottom duration-300">
+          <div className="flex items-center justify-between pb-2 border-b border-white/10">
+            <span className="text-[9px] font-black tracking-widest text-purple-400">STUDIO INTEGRATED MONITOR</span>
+            <button onClick={() => setIsExpanded(false)} className="text-white/40 hover:text-white transition-colors cursor-pointer"><X size={14} /></button>
+          </div>
+          <div className="relative aspect-square w-full bg-neutral-900 border border-white/5 overflow-hidden">
+            <img src={currentBeat.artworkUrl} className="w-full h-full object-cover grayscale" />
+            <div className="absolute bottom-3 right-3 bg-purple-600 text-white font-black text-[7px] tracking-widest uppercase px-2 py-0.5 rounded-sm">
+              24-BIT MASTER
+            </div>
+          </div>
+          
+          {/* Real Peak Level meters */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[8px] font-bold text-white/40 uppercase tracking-widest">
+              <span>Stereo Peak VU</span>
+              <span className={cn(meterData.isClipping && "text-red-500 animate-pulse font-black")}>
+                {meterData.isClipping ? "LIMITER HARD CEILING" : `${meterData.outputPeakDb} dB`}
+              </span>
+            </div>
+            <div className="h-3 w-full bg-white/5 border border-white/5 relative overflow-hidden flex gap-0.5 p-0.5 rounded-xs">
+              <div 
+                className={cn(
+                  "h-full transition-all duration-100 rounded-2xs",
+                  meterData.isClipping ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-gradient-to-r from-purple-500 via-purple-400 to-white"
+                )}
+                style={{ width: `${Math.max(5, Math.min(100, ((meterData.outputPeakDb + 60) / 60) * 100))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Keyboard guides and shortcuts */}
+          <div className="text-[8px] font-mono text-white/30 space-y-1.5 border-t border-white/5 pt-4">
+            <div className="text-[9px] font-black uppercase tracking-wider text-purple-400 pb-1">Shortcut System:</div>
+            <div>[Space] Play / Pause Track</div>
+            <div>[M] Mute / Unmute Player</div>
+            <div>[➔] Fast Forward 10s</div>
+            <div>[➔] Fast Backward 10s</div>
+          </div>
+        </div>
+      )}
 
       {/* Constant Licensing Modal */}
       <LicensingModal 

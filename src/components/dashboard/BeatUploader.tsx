@@ -21,14 +21,13 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const sectionTabs = [
-  { id: 1, name: 'Release', icon: FileText },
-  { id: 2, name: 'Audio', icon: Music },
-  { id: 3, name: 'Stems', icon: Archive },
-  { id: 4, name: 'Artwork', icon: ImageIcon },
-  { id: 5, name: 'Pricing', icon: DollarSign },
-  { id: 6, name: 'Metadata', icon: Cpu },
-  { id: 7, name: 'Store Options', icon: Globe },
-  { id: 8, name: 'Publish', icon: CheckCircle },
+  { id: 1, name: 'Audio', icon: Music },
+  { id: 2, name: 'Processing', icon: Activity },
+  { id: 3, name: 'Artwork', icon: ImageIcon },
+  { id: 4, name: 'Beat Info', icon: FileText },
+  { id: 5, name: 'Store Options', icon: DollarSign },
+  { id: 6, name: 'Preview', icon: Eye },
+  { id: 7, name: 'Publish', icon: CheckCircle },
 ];
 
 export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
@@ -150,6 +149,59 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
 
   const [tagInput, setTagInput] = useState('');
   const [copiedIframe, setCopiedIframe] = useState(false);
+
+  // Internet Archive Extraction & Validation Stage States
+  const [iaStatus, setIaStatus] = useState<'idle' | 'fetching' | 'extracting' | 'validating' | 'ready' | 'error'>('idle');
+  const [iaError, setIaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeSection === 2 && formData.audioUrl) {
+      setIaStatus('fetching');
+      setIaError(null);
+
+      const triggerValidation = async () => {
+        try {
+          // Paced processing transition
+          await new Promise(r => setTimeout(r, 800));
+          setIaStatus('extracting');
+          await new Promise(r => setTimeout(r, 600));
+          
+          const res = await fetch('/api/archive/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urlOrId: formData.audioUrl })
+          });
+          const data = await res.json();
+          
+          if (!data.success) {
+            setIaStatus('error');
+            setIaError(data.error || 'Failed to extract playable audio file.');
+            return;
+          }
+
+          setIaStatus('validating');
+          await new Promise(r => setTimeout(r, 800));
+
+          // Set extracted, validated audio details into form state
+          setFormData(prev => ({
+            ...prev,
+            audioUrl: data.playableUrl,
+            audioFileName: data.fileName,
+            audioFormatCodec: `${data.format} Master`,
+            sampleRate: '44.1 kHz',
+            bitDepth: '24-bit HD'
+          }));
+
+          setIaStatus('ready');
+        } catch (err: any) {
+          setIaStatus('error');
+          setIaError(err.message || 'An unexpected error occurred during audio validation.');
+        }
+      };
+
+      triggerValidation();
+    }
+  }, [activeSection, formData.audioUrl]);
 
   // BPM Tap Tempo Handler
   const handleBpmTap = () => {

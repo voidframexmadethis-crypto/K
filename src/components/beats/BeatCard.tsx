@@ -3,13 +3,16 @@ import { Link } from 'react-router-dom';
 import { Play, ShoppingCart, Heart, Share2, Download } from 'lucide-react';
 import { Beat } from '../../types';
 import { useAudioStore } from '../../store/useAudioStore';
+import { useUserPreferencesStore } from '../../store/useUserPreferencesStore';
 import { LicensingModal } from './LicensingModal';
 import { BeatShareModal } from '../player/BeatShareModal';
 import { FreeDownloadModal } from './FreeDownloadModal';
 
 export const BeatCard = ({ beat }: { beat: Beat }) => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
+  const { favorites, toggleFavorite } = useUserPreferencesStore();
   const isCurrent = currentBeat?.id === beat.id;
+  const isFavorite = favorites.includes(beat.id);
   const [isLicensingOpen, setIsLicensingOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
@@ -65,8 +68,18 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
 
         {/* Top Right Actions */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
-           <button className="w-10 h-10 bg-black/80 backdrop-blur-md border border-white/10 text-white flex items-center justify-center hover:bg-white hover:text-black transition-colors">
-              <Heart size={18} />
+           <button 
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               toggleFavorite(beat.id);
+             }}
+             className={`w-10 h-10 bg-black/80 backdrop-blur-md border border-white/10 flex items-center justify-center transition-colors cursor-pointer ${
+               isFavorite ? 'text-purple-400 border-purple-500' : 'text-white hover:bg-white hover:text-black'
+             }`}
+             title={isFavorite ? "Remove from Favorites" : "Save to Favorites"}
+           >
+              <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
            </button>
            <button 
              onClick={(e) => {
@@ -97,7 +110,7 @@ export const BeatCard = ({ beat }: { beat: Beat }) => {
       <div className="flex flex-col gap-3">
         <div className="flex justify-between items-start">
           <div className="min-w-0">
-            <Link to="/audio-player">
+            <Link to={`/beat/${beat.id}`}>
               <h3 className="text-lg font-bold text-white uppercase tracking-tighter truncate group-hover:text-white/80 transition-colors">
                 {beat.title}
               </h3>

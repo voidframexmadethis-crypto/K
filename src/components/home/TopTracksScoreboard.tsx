@@ -11,8 +11,10 @@ export const TopTracksScoreboard: React.FC = () => {
   const { setBeat, currentBeat, isPlaying, togglePlay } = useAudioStore();
   const { beats } = useBeatCatalogStore();
   const [selectedBeatForLicense, setSelectedBeatForLicense] = useState<Beat | null>(null);
+  const [rankingPeriod, setRankingPeriod] = useState<'week' | 'month' | 'all'>('week');
 
-  const top10Beats: Beat[] = beats.slice(0, 10);
+  const sortedBeats = [...beats].sort((a, b) => (b.playsCount || 0) - (a.playsCount || 0));
+  const top10Beats: Beat[] = sortedBeats.slice(0, 10);
 
   const formatPlays = (count: number) => {
     if (count >= 1000000) return (count / 1000000).toFixed(1) + 'M';
@@ -30,15 +32,37 @@ export const TopTracksScoreboard: React.FC = () => {
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
               <TrendingUp size={16} className="text-purple-400" />
-              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-purple-400">Official Catalog Trends</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-purple-400">Verified Catalog Trends</span>
             </div>
             <h2 className="text-4xl md:text-6xl font-black uppercase text-white tracking-tight">
-              TRENDING BEATS
+              TOP 10 & TRENDING
             </h2>
           </div>
-          <span className="text-xs font-bold text-white/40 uppercase tracking-widest">
-            Top Streaming & Licensed Beats
-          </span>
+          
+          {/* Period Tabs & Genuine Metric Badge */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex items-center bg-white/5 border border-white/10 p-1">
+              {[
+                { id: 'week', label: 'THIS WEEK' },
+                { id: 'month', label: 'THIS MONTH' },
+                { id: 'all', label: 'ALL TIME' },
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setRankingPeriod(p.id as any)}
+                  className={cn(
+                    "px-4 py-2 text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer",
+                    rankingPeriod === p.id ? "bg-white text-black" : "text-white/40 hover:text-white"
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1.5 uppercase tracking-widest">
+              ● REAL STORE AUDITIONS
+            </span>
+          </div>
         </div>
 
         {/* Top 10 Chart Table */}

@@ -68,6 +68,13 @@ export interface Beat {
   playsCount?: number;
   createdAt: string;
   published: boolean;
+  isArchived?: boolean;
+  pricingTemplateId?: string;
+  collectionId?: string;
+  producerNotes?: string;
+  isVault?: boolean;
+  energy?: string;
+  style?: string;
   storage?: BeatStorageMetadata;
 }
 

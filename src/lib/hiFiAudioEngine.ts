@@ -440,6 +440,12 @@ class HiFiDSPAudioEngine {
     }
   }
 
+  public getByteFrequencyData(array: Uint8Array) {
+    if (this.outputAnalyser && this.isInitialized && !this.isFallbackActive) {
+      this.outputAnalyser.getByteFrequencyData(array as any);
+    }
+  }
+
   public getSettings(): EngineerSettings {
     return { ...this.settings };
   }

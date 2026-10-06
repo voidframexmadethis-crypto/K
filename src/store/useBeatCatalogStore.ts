@@ -9,6 +9,8 @@ interface BeatCatalogState {
   isHydrated: boolean;
   addBeat: (beat: Beat) => Promise<Beat>;
   updateBeat: (id: string, partialBeat: Partial<Beat>) => Promise<void>;
+  bulkUpdateBeats: (ids: string[], partialBeat: Partial<Beat>) => Promise<void>;
+  bulkDeleteBeats: (ids: string[]) => Promise<void>;
   removeBeat: (id: string) => Promise<void>;
   clearCatalog: () => void;
   findBeatByIdempotencyKey: (key: string) => Beat | undefined;
@@ -149,6 +151,53 @@ export const useBeatCatalogStore = create<BeatCatalogState>()((set, get) => ({
       console.log(`[FIRESTORE_CATALOG] Beat updated in Firestore: ${id}`);
     } catch (err: any) {
       console.warn('[FIRESTORE_CATALOG] Firestore updateDoc warning:', err?.message || err);
+    }
+  },
+
+  bulkUpdateBeats: async (ids: string[], partialBeat: Partial<Beat>) => {
+    const state = get();
+    const idSet = new Set(ids);
+    const updatedBeats = state.beats.map((b) =>
+      idSet.has(b.id) ? { ...b, ...partialBeat } : b
+    );
+    set({ beats: updatedBeats });
+    persistBeats(updatedBeats);
+
+    const cleanPartial = sanitizeBeatForFirestore(partialBeat);
+    const chunkSize = 20;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (id) => {
+          try {
+            await updateDoc(doc(db, 'beats', id), cleanPartial);
+          } catch (err: any) {
+            console.warn(`[FIRESTORE_CATALOG] Firestore bulk update warning for ${id}:`, err?.message || err);
+          }
+        })
+      );
+    }
+  },
+
+  bulkDeleteBeats: async (ids: string[]) => {
+    const state = get();
+    const idSet = new Set(ids);
+    const updatedBeats = state.beats.filter((b) => !idSet.has(b.id));
+    set({ beats: updatedBeats });
+    persistBeats(updatedBeats);
+
+    const chunkSize = 20;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (id) => {
+          try {
+            await deleteDoc(doc(db, 'beats', id));
+          } catch (err: any) {
+            console.warn(`[FIRESTORE_CATALOG] Firestore bulk delete warning for ${id}:`, err?.message || err);
+          }
+        })
+      );
     }
   },
 

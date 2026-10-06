@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -7,37 +7,49 @@ import { MainHeader } from './components/layout/Header';
 import { PersistentPlayer } from './components/player/PersistentPlayer';
 import { MassiveFooter } from './components/layout/MassiveFooter';
 import { HomePage } from './pages/HomePage';
-import { BeatsPage } from './pages/BeatsPage';
-import { CollectionsPage } from './pages/CollectionsPage';
-import { PacksPage } from './pages/PacksPage';
-import { FreeBeatsPage } from './pages/FreeBeatsPage';
-import { MerchPage } from './pages/MerchPage';
-import { VideosPage } from './pages/VideosPage';
-import { FavoritesPage } from './pages/FavoritesPage';
-import { CartPage } from './pages/CartPage';
-import { BeatUploader } from './components/dashboard/BeatUploader';
-import { BeatPackUploader } from './components/dashboard/BeatPackUploader';
-import { DashboardLayout } from './components/dashboard/DashboardLayout';
-import { SalesDashboard } from './components/dashboard/SalesDashboard';
-import { CatalogDashboard } from './components/dashboard/CatalogDashboard';
-import { AnalyticsDashboard } from './components/dashboard/AnalyticsDashboard';
-import { MarketingDashboard } from './components/dashboard/MarketingDashboard';
-import { ContentLab } from './components/dashboard/ContentLab';
-import { Achievements } from './components/dashboard/Achievements';
-import { VRReviewsSuite } from './components/vr/VRReviewsSuite';
-import { NotificationSettings } from './components/dashboard/NotificationSettings';
-import { RemoveBeatsFromPlayer } from './components/dashboard/RemoveBeatsFromPlayer';
-import { ProfileSettings } from './components/dashboard/ProfileSettings';
-import { ProducerProfilePage } from './pages/ProducerProfilePage';
-import { CustomerLibrary } from './pages/CustomerLibrary';
-import { AudioPlayerPage } from './pages/AudioPlayerPage';
-import { ServicesPage } from './pages/ServicesPage';
+
+// Lazy-loaded pages
+const BeatsPage = lazy(() => import('./pages/BeatsPage').then(m => ({ default: m.BeatsPage })));
+const CollectionsPage = lazy(() => import('./pages/CollectionsPage').then(m => ({ default: m.CollectionsPage })));
+const PacksPage = lazy(() => import('./pages/PacksPage').then(m => ({ default: m.PacksPage })));
+const FreeBeatsPage = lazy(() => import('./pages/FreeBeatsPage').then(m => ({ default: m.FreeBeatsPage })));
+const MerchPage = lazy(() => import('./pages/MerchPage').then(m => ({ default: m.MerchPage })));
+const VideosPage = lazy(() => import('./pages/VideosPage').then(m => ({ default: m.VideosPage })));
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })));
+const CartPage = lazy(() => import('./pages/CartPage').then(m => ({ default: m.CartPage })));
+const ProducerProfilePage = lazy(() => import('./pages/ProducerProfilePage').then(m => ({ default: m.ProducerProfilePage })));
+const CustomerLibrary = lazy(() => import('./pages/CustomerLibrary').then(m => ({ default: m.CustomerLibrary })));
+const AudioPlayerPage = lazy(() => import('./pages/AudioPlayerPage').then(m => ({ default: m.AudioPlayerPage })));
+const ServicesPage = lazy(() => import('./pages/ServicesPage').then(m => ({ default: m.ServicesPage })));
+const PressKitPage = lazy(() => import('./pages/PressKitPage').then(m => ({ default: m.PressKitPage })));
+const BeatDetailPage = lazy(() => import('./pages/BeatDetailPage').then(m => ({ default: m.BeatDetailPage })));
+
+// Lazy-loaded dashboard modules
+const BeatUploader = lazy(() => import('./components/dashboard/BeatUploader').then(m => ({ default: m.BeatUploader })));
+const BeatPackUploader = lazy(() => import('./components/dashboard/BeatPackUploader').then(m => ({ default: m.BeatPackUploader })));
+const DashboardLayout = lazy(() => import('./components/dashboard/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
+const SalesDashboard = lazy(() => import('./components/dashboard/SalesDashboard').then(m => ({ default: m.SalesDashboard })));
+const CatalogDashboard = lazy(() => import('./components/dashboard/CatalogDashboard').then(m => ({ default: m.CatalogDashboard })));
+const AnalyticsDashboard = lazy(() => import('./components/dashboard/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const MarketingDashboard = lazy(() => import('./components/dashboard/MarketingDashboard').then(m => ({ default: m.MarketingDashboard })));
+const ContentLab = lazy(() => import('./components/dashboard/ContentLab').then(m => ({ default: m.ContentLab })));
+const Achievements = lazy(() => import('./components/dashboard/Achievements').then(m => ({ default: m.Achievements })));
+const VRReviewsSuite = lazy(() => import('./components/vr/VRReviewsSuite').then(m => ({ default: m.VRReviewsSuite })));
+const NotificationSettings = lazy(() => import('./components/dashboard/NotificationSettings').then(m => ({ default: m.NotificationSettings })));
+const RemoveBeatsFromPlayer = lazy(() => import('./components/dashboard/RemoveBeatsFromPlayer').then(m => ({ default: m.RemoveBeatsFromPlayer })));
+const ProfileSettings = lazy(() => import('./components/dashboard/ProfileSettings').then(m => ({ default: m.ProfileSettings })));
+const CuratedPlaylistsManager = lazy(() => import('./components/dashboard/CuratedPlaylistsManager').then(m => ({ default: m.CuratedPlaylistsManager })));
+import { ProducerAuthGuard } from './components/dashboard/ProducerAuthGuard';
 import { useBeatDeepLink } from './lib/useBeatDeepLink';
 import { logAnalyticsEvent } from './services/analyticsService';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { cn } from './lib/utils';
 import { preloadPayPalSdk } from './components/payment/PayPalPayment';
+import { MiniCart } from './components/payment/MiniCart';
+
+import { KraezelvPulse } from './components/dashboard/KraezelvPulse';
+import { ProducerIntelligence } from './components/dashboard/ProducerIntelligence';
 
 const DashboardOverview = () => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -92,6 +104,12 @@ const DashboardOverview = () => {
           </div>
         ))}
       </div>
+
+      {/* KRAEZELV PULSE REAL TELEMETRY */}
+      <KraezelvPulse />
+
+      {/* PRODUCER INTELLIGENCE CATALOG ANALYTICS */}
+      <ProducerIntelligence />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div className="lg:col-span-8 flex flex-col gap-6">
@@ -180,47 +198,59 @@ function MainAppContent() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black font-sans">
       <MainHeader />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/beats" element={<BeatsPage />} />
-        <Route path="/collections" element={<CollectionsPage />} />
-        <Route path="/packs" element={<PacksPage />} />
-        <Route path="/free-beats" element={<FreeBeatsPage />} />
-        <Route path="/merch" element={<MerchPage />} />
-        <Route path="/videos" element={<VideosPage />} />
-        <Route path="/favorites" element={<FavoritesPage />} />
-        <Route path="/cart" element={<CartPage />} />
-        <Route path="/services" element={<ServicesPage />} />
-        <Route path="/profile" element={<ProducerProfilePage />} />
-        <Route path="/producer/*" element={<ProducerProfilePage />} />
-        <Route path="/audio-player" element={<AudioPlayerPage />} />
-        <Route path="/account" element={<CustomerLibrary />} />
-        <Route path="/logout" element={<LogoutHandler />} />
-        <Route 
-          path="/dashboard/*" 
-          element={
-            <DashboardLayout>
-              <Routes>
-                <Route path="/" element={<DashboardOverview />} />
-                <Route path="/upload" element={<BeatUploader />} />
-                <Route path="/upload-pack" element={<BeatPackUploader />} />
-                <Route path="/music" element={<CatalogDashboard />} />
-                <Route path="/remove-beats" element={<RemoveBeatsFromPlayer />} />
-                <Route path="/sales" element={<SalesDashboard />} />
-                <Route path="/analytics" element={<AnalyticsDashboard />} />
-                <Route path="/vr-reviews" element={<VRReviewsSuite />} />
-                <Route path="/notifications" element={<NotificationSettings />} />
-                <Route path="/marketing" element={<MarketingDashboard />} />
-                <Route path="/content" element={<ContentLab />} />
-                <Route path="/achievements" element={<Achievements />} />
-                <Route path="/settings" element={<ProfileSettings />} />
-                <Route path="*" element={<div className="py-20 text-center uppercase tracking-widest text-white/20">Module Under Construction</div>} />
-              </Routes>
-            </DashboardLayout>
-          } 
-        />
-      </Routes>
+      <Suspense fallback={
+        <div className="min-h-[50vh] flex items-center justify-center bg-black">
+          <div className="text-white text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Loading Module...</div>
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/beats" element={<BeatsPage />} />
+          <Route path="/collections" element={<CollectionsPage />} />
+          <Route path="/packs" element={<PacksPage />} />
+          <Route path="/free-beats" element={<FreeBeatsPage />} />
+          <Route path="/merch" element={<MerchPage />} />
+          <Route path="/videos" element={<VideosPage />} />
+          <Route path="/favorites" element={<FavoritesPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/services" element={<ServicesPage />} />
+          <Route path="/profile" element={<ProducerProfilePage />} />
+          <Route path="/producer/*" element={<ProducerProfilePage />} />
+          <Route path="/press-kit" element={<PressKitPage />} />
+          <Route path="/beat/:id" element={<BeatDetailPage />} />
+          <Route path="/audio-player" element={<AudioPlayerPage />} />
+          <Route path="/account" element={<CustomerLibrary />} />
+          <Route path="/logout" element={<LogoutHandler />} />
+          <Route 
+            path="/dashboard/*" 
+            element={
+              <ProducerAuthGuard>
+                <DashboardLayout>
+                  <Routes>
+                    <Route path="/" element={<DashboardOverview />} />
+                    <Route path="/upload" element={<BeatUploader />} />
+                    <Route path="/upload-pack" element={<BeatPackUploader />} />
+                    <Route path="/music" element={<CatalogDashboard />} />
+                    <Route path="/remove-beats" element={<RemoveBeatsFromPlayer />} />
+                    <Route path="/sales" element={<SalesDashboard />} />
+                    <Route path="/analytics" element={<AnalyticsDashboard />} />
+                    <Route path="/vr-reviews" element={<VRReviewsSuite />} />
+                    <Route path="/notifications" element={<NotificationSettings />} />
+                    <Route path="/marketing" element={<MarketingDashboard />} />
+                    <Route path="/content" element={<ContentLab />} />
+                    <Route path="/playlists" element={<CuratedPlaylistsManager />} />
+                    <Route path="/achievements" element={<Achievements />} />
+                    <Route path="/settings" element={<ProfileSettings />} />
+                    <Route path="*" element={<div className="py-20 text-center uppercase tracking-widest text-white/20">Module Under Construction</div>} />
+                  </Routes>
+                </DashboardLayout>
+              </ProducerAuthGuard>
+            } 
+          />
+        </Routes>
+      </Suspense>
       <PersistentPlayer />
+      <MiniCart />
       <MassiveFooter />
     </div>
   );

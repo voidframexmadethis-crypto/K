@@ -142,6 +142,58 @@
         "lastUpdated": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "onboardingStatus"]
+    },
+    "Placement": {
+      "title": "Placement Credit",
+      "description": "Documented music placement credit for KRAEZELV.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "artistName": { "type": "string", "maxLength": 100 },
+        "songTitle": { "type": "string", "maxLength": 100 },
+        "albumTitle": { "type": "string", "maxLength": 100 },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "streamUrl": { "type": "string", "format": "uri" },
+        "releaseYear": { "type": "string" },
+        "certifiedStreams": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["artistName", "songTitle"]
+    },
+    "CuratedCollection": {
+      "title": "Curated Playlist Collection",
+      "description": "Owner-curated playlist of beats.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "coverUrl": { "type": "string", "format": "uri" },
+        "beatIds": { "type": "array" },
+        "featured": { "type": "boolean" },
+        "displayOrder": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title"]
+    },
+    "VerifiedReview": {
+      "title": "Verified Customer Review",
+      "description": "Moderated review submitted by verified beat purchasers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "beatId": { "type": "string" },
+        "beatTitle": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerName": { "type": "string" },
+        "rating": { "type": "integer" },
+        "reviewText": { "type": "string", "maxLength": 1000 },
+        "verifiedPurchase": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["approved", "pending", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["beatId", "customerEmail", "rating", "reviewText"]
     }
   },
   "firestore": {
@@ -152,6 +204,18 @@
     "/beat_packs/{packId}": {
       "schema": "BeatPack",
       "description": "Public catalog of available beat packs and bundles."
+    },
+    "/placements/{placementId}": {
+      "schema": "Placement",
+      "description": "Documented KRAEZELV industry placement credits."
+    },
+    "/curated_collections/{collectionId}": {
+      "schema": "CuratedCollection",
+      "description": "Owner-curated playlist collections."
+    },
+    "/verified_reviews/{reviewId}": {
+      "schema": "VerifiedReview",
+      "description": "Moderated verified buyer reviews."
     },
     "/producers/{userId}": {
       "schema": "Producer",

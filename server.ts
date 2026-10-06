@@ -29,6 +29,7 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import webpush from 'web-push';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -288,6 +289,43 @@ async function startServer() {
     });
   });
 
+  // In-memory cache for resolved direct storage URLs to eliminate manual HEAD redirect resolution latency during byte-range seeks
+  const resolvedUrlCache = new Map<string, string>();
+
+  // Helper to iteratively resolve HTTP redirects to find the direct final destination storage URL (e.g., Internet Archive edge nodes)
+  async function resolveRedirects(url: string): Promise<string> {
+    if (resolvedUrlCache.has(url)) {
+      return resolvedUrlCache.get(url)!;
+    }
+
+    let currentUrl = url;
+    const maxRedirects = 5;
+    for (let i = 0; i < maxRedirects; i++) {
+      try {
+        const response = await fetch(currentUrl, {
+          method: 'HEAD',
+          redirect: 'manual',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (location) {
+            currentUrl = new URL(location, currentUrl).toString();
+            continue;
+          }
+        }
+        break;
+      } catch (err) {
+        console.error(`[AUDIO_PROXY] Error manual redirect resolution for ${currentUrl}:`, err);
+        break;
+      }
+    }
+    resolvedUrlCache.set(url, currentUrl);
+    return currentUrl;
+  }
+
   // Server-side Audio Proxy Route for Cross-Origin & Range Request Support
   app.get('/api/audio/proxy', async (req: Request, res: Response) => {
     const rawTargetUrl = req.query.url as string;
@@ -300,7 +338,17 @@ async function startServer() {
       targetUrl = targetUrl.replace('archive.org/details/', 'archive.org/download/');
     }
 
+    // Set up AbortController to immediately cancel remote fetch on client disconnect / track change
+    const abortController = new AbortController();
+    req.on('close', () => {
+      abortController.abort();
+    });
+
     try {
+      // Manual redirect resolution prior to range request fetching to prevent HTTP agents
+      // (like undici/global fetch) from stripping the critical 'Range' header across different domains.
+      const resolvedUrl = await resolveRedirects(targetUrl);
+
       const requestHeaders: Record<string, string> = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       };
@@ -308,20 +356,22 @@ async function startServer() {
         requestHeaders['Range'] = req.headers.range;
       }
 
-      const fetchRes = await fetch(targetUrl, {
+      const fetchRes = await fetch(resolvedUrl, {
         headers: requestHeaders,
         redirect: 'follow',
+        signal: abortController.signal
       });
 
       if (!fetchRes.ok && fetchRes.status !== 206) {
-        console.warn(`[AUDIO_PROXY] Remote fetch status: ${fetchRes.status} for ${targetUrl}`);
+        console.warn(`[AUDIO_PROXY] Remote fetch status: ${fetchRes.status} for ${resolvedUrl}`);
         return res.status(fetchRes.status).send(`Failed to fetch audio: ${fetchRes.statusText}`);
       }
 
-      const lowerUrl = targetUrl.toLowerCase();
+      // Check both initial target and resolved URL for audio format indications
+      const checkPath = (targetUrl + ' ' + resolvedUrl).toLowerCase();
       let contentType = fetchRes.headers.get('content-type') || 'audio/mpeg';
-      if (contentType.includes('text/html') || contentType.includes('application/octet-stream')) {
-        if (lowerUrl.endsWith('.m4a') || lowerUrl.includes('.m4a?')) {
+      if (contentType.includes('text/html') || contentType.includes('application/octet-stream') || !contentType.startsWith('audio/')) {
+        if (checkPath.includes('.m4a')) {
           contentType = 'audio/mp4';
         } else {
           contentType = 'audio/mpeg';
@@ -341,23 +391,21 @@ async function startServer() {
       if (contentRange) res.setHeader('Content-Range', contentRange);
       res.setHeader('Accept-Ranges', 'bytes');
 
+      // Safe client-side caching for up to 1 day for range request audio buffers
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+
       res.status(fetchRes.status);
 
       if (fetchRes.body) {
-        const reader = fetchRes.body.getReader();
-        const pump = async () => {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            res.write(value);
-          }
-          res.end();
-        };
-        await pump();
+        Readable.fromWeb(fetchRes.body as any).pipe(res);
       } else {
         res.end();
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        console.log('[AUDIO_PROXY] Connection aborted successfully due to client track change or seek.');
+        return;
+      }
       console.error('[AUDIO_PROXY_ERROR]', err?.message || err);
       if (!res.headersSent) {
         res.status(500).send('Audio proxy error');
@@ -911,6 +959,72 @@ async function startServer() {
     res.json({ success: true, purchaseId });
   });
 
+  // Extract and Validate Internet Archive Item/File
+  app.post('/api/archive/validate', express.json(), async (req: Request, res: Response) => {
+    const { urlOrId } = req.body;
+    if (!urlOrId) {
+      return res.status(400).json({ success: false, error: 'Missing URL or Item ID' });
+    }
+
+    // Extract item ID from URL (e.g. https://archive.org/details/my-beat-item -> my-beat-item)
+    let itemId = urlOrId.trim();
+    if (itemId.includes('archive.org/details/')) {
+      itemId = itemId.split('archive.org/details/')[1].split('/')[0];
+    } else if (itemId.includes('archive.org/download/')) {
+      itemId = itemId.split('archive.org/download/')[1].split('/')[0];
+    }
+
+    try {
+      console.log(`[IA_VALIDATION] Validating Internet Archive item ID: ${itemId}`);
+      // 1. Fetch IA Metadata
+      const metaRes = await fetch(`https://archive.org/metadata/${itemId}`);
+      if (!metaRes.ok) {
+        return res.status(400).json({ success: false, error: 'Failed to retrieve Internet Archive item metadata.' });
+      }
+
+      const metaData = await metaRes.json() as any;
+      if (!metaData || !metaData.files || metaData.files.length === 0) {
+        return res.status(400).json({ success: false, error: 'Internet Archive item has no files.' });
+      }
+
+      // 2. Identify correct MP3 or M4A file (WAV is permanently excluded)
+      const audioFile = metaData.files.find((f: any) => {
+        const name = f.name.toLowerCase();
+        return (name.endsWith('.mp3') || name.endsWith('.m4a')) && !name.includes('_vbr.mp3') && !name.includes('_sample');
+      });
+
+      if (!audioFile) {
+        return res.status(400).json({ success: false, error: 'No playable MP3 or M4A file found in this Internet Archive item (WAV is prohibited).' });
+      }
+
+      const playableUrl = `https://archive.org/download/${itemId}/${audioFile.name}`;
+
+      // 3. Validate Playable URL by sending a HEAD request
+      const valRes = await fetch(playableUrl, { method: 'HEAD' });
+      const mimeType = valRes.headers.get('content-type') || '';
+      const contentLength = parseInt(valRes.headers.get('content-length') || '0', 10);
+
+      // Verify MIME type is audio
+      if (!mimeType.includes('audio/') && !mimeType.includes('application/octet-stream')) {
+        return res.status(400).json({ success: false, error: `Invalid audio MIME type: ${mimeType}` });
+      }
+
+      res.json({
+        success: true,
+        itemId,
+        fileName: audioFile.name,
+        size: contentLength || audioFile.size,
+        format: audioFile.name.endsWith('.m4a') ? 'M4A' : 'MP3',
+        playableUrl,
+        proxyUrl: `/api/audio/proxy?url=${encodeURIComponent(playableUrl)}`,
+        mimeType
+      });
+    } catch (err: any) {
+      console.error('[IA_VALIDATION_ERROR]', err);
+      res.status(500).json({ success: false, error: `Validation error: ${err.message}` });
+    }
+  });
+
   // Payhip Webhook
   app.post('/api/webhooks/payhip', express.json(), async (req: Request, res: Response) => {
     const event = req.body;
@@ -920,8 +1034,19 @@ async function startServer() {
     if (apiKey) {
       const crypto = require('crypto');
       const expectedSignature = crypto.createHash('sha256').update(apiKey.trim()).digest('hex');
-      if (signature !== expectedSignature) {
-        console.error('[PAYHIP_WEBHOOK] Signature mismatch');
+      
+      if (typeof signature !== 'string' || signature.length !== expectedSignature.length) {
+        console.error('[PAYHIP_WEBHOOK] Signature mismatch or invalid format');
+        return res.status(401).send('Invalid signature');
+      }
+
+      const isBufferEqual = crypto.timingSafeEqual(
+        Buffer.from(signature, 'utf8'),
+        Buffer.from(expectedSignature, 'utf8')
+      );
+
+      if (!isBufferEqual) {
+        console.error('[PAYHIP_WEBHOOK] Signature verification failed');
         return res.status(401).send('Invalid signature');
       }
     }

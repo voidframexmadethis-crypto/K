@@ -3,14 +3,16 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   Search, Heart, ShoppingCart, User, Menu, X, Youtube, PlayCircle, ChevronDown, 
   ExternalLink, LayoutDashboard, Music, Plus, BarChart3, ShoppingBag, Video, 
-  Settings, LogOut, Target, Globe, Smartphone, Sun, Moon, HelpCircle, UserPlus, LogIn, Sparkles
+  Settings, LogOut, Target, Globe, Smartphone, Sun, Moon, HelpCircle, Lock, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { auth } from '../../lib/firebase';
-import { onAuthStateChanged, User as FirebaseUser, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { useCartStore } from '../../store/useCartStore';
 
 export const MainHeader = () => {
+  const { items, toggleCart } = useCartStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
@@ -18,7 +20,6 @@ export const MainHeader = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [language, setLanguage] = useState('EN');
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
 
   const accountRef = useRef<HTMLDivElement>(null);
@@ -54,27 +55,19 @@ export const MainHeader = () => {
   }, [location]);
 
   const navLinks = [
-    { name: 'Beats', href: '/beats' },
-    { name: 'Services & Distribution', href: '/services' },
-    { name: 'Profile', href: '/profile' },
-    { name: 'Collections', href: '/collections' },
+    { name: 'Beats Catalog', href: '/beats' },
     { name: 'Beat Packs', href: '/packs' },
     { name: 'Free Beats', href: '/free-beats' },
-    { name: 'Audio Player', href: '/audio-player' },
-    { name: 'Merch', href: '/merch' },
-    { name: 'Videos', href: '/videos' },
+    { name: 'Services & Mixing', href: '/services' },
+    { name: 'KRAEZELV Bio', href: '/profile' },
+    { name: 'My Purchases', href: '/account' },
   ];
 
   const accountLinks = [
-    { name: 'DASHBOARD / UPLOAD PORTAL', href: '/dashboard', icon: LayoutDashboard, prominent: true },
-    { name: 'View Public Profile', href: '/profile', icon: User },
-    { name: 'My Beats', href: '/dashboard/music', icon: Music },
-    { name: 'Upload Beat', href: '/dashboard/upload', icon: Plus },
-    { name: 'Beat Packs', href: '/packs', icon: ShoppingBag },
-    { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-    { name: 'Marketing', href: '/dashboard/marketing', icon: Target },
-    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-    { name: 'Log Out', href: '/logout', icon: LogOut, danger: true },
+    { name: 'PRODUCER PROFILE', href: '/profile', icon: User, prominent: true },
+    { name: 'My Purchases & Licenses', href: '/account', icon: ShoppingBag },
+    { name: 'Saved Beats', href: '/favorites', icon: Heart },
+    { name: 'Admin Dashboard', href: '/dashboard', icon: LayoutDashboard },
   ];
 
   return (
@@ -159,7 +152,7 @@ export const MainHeader = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`SEARCH MILLIONS OF ${searchCategory.toUpperCase()}...`}
+              placeholder="SEARCH KRAEZELV BEATS, GENRES, BPM, KEYS..."
               className="w-full bg-transparent text-[10px] font-bold text-white uppercase tracking-widest outline-none placeholder:text-white/30"
             />
           </div>
@@ -181,27 +174,30 @@ export const MainHeader = () => {
           ))}
         </nav>
 
-        {/* Zone 3: Account & Artist Onboarding CTAs (Items 2, 3, 4) */}
+        {/* Zone 3: Profile & Cart CTAs */}
         <div className="flex items-center gap-4 shrink-0">
-          {/* 4. New Artist Ingestion Portal CTA */}
-          {user && (
-            <Link 
-              to="/dashboard"
-              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-md"
-            >
-              <LayoutDashboard size={12} /> DASHBOARD / UPLOAD PORTAL
-            </Link>
-          )}
+          {/* Producer Profile Link */}
+          <Link 
+            to="/profile"
+            className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white text-black text-[9px] font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-md"
+            title="KRAEZELV Producer Profile"
+          >
+            <User size={13} /> PROFILE
+          </Link>
 
-          {/* 3. New Fan Account Registration CTA */}
-          {!user && (
-            <button 
-              onClick={() => setShowLoginModal(true)}
-              className="hidden md:flex items-center gap-2 px-4 py-2.5 border border-white/20 text-white text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all"
-            >
-              <UserPlus size={12} /> Sign Up
-            </button>
-          )}
+          {/* Dynamic Shopping Cart Icon & Live Badge */}
+          <button 
+            onClick={() => toggleCart()}
+            className="relative p-2.5 border border-white/10 hover:border-white/30 text-white/80 hover:text-white bg-white/5 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+            title="Open Shopping Cart"
+          >
+            <ShoppingBag size={16} />
+            {items.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-purple-500 text-white font-mono text-[8px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-black">
+                {items.length}
+              </span>
+            )}
+          </button>
 
           {/* Account Dropdown */}
           <div className="relative" ref={accountRef}>
@@ -213,7 +209,7 @@ export const MainHeader = () => {
               )}
             >
               <User size={16} />
-              <span className="hidden sm:inline">Account</span>
+              <span className="hidden sm:inline">Menu</span>
               <ChevronDown size={12} className={cn("transition-transform duration-300", isAccountOpen && "rotate-180")} />
             </button>
 
@@ -227,23 +223,20 @@ export const MainHeader = () => {
                   className="absolute right-0 mt-4 w-64 bg-black/95 backdrop-blur-2xl border border-white/15 shadow-2xl overflow-hidden z-[110]"
                 >
                   <div className="flex flex-col py-2">
-                    {accountLinks
-                      .filter(link => !link.prominent || user)
-                      .map((link) => (
-                        <Link
-                          key={link.name}
-                          to={link.href}
-                          className={cn(
-                            "flex items-center gap-3 px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-                            link.prominent ? "bg-white text-black hover:bg-neutral-200" : 
-                            link.danger ? "text-red-500 hover:bg-red-500/10" :
-                            "text-white/50 hover:text-white hover:bg-white/5"
-                          )}
-                        >
-                          <link.icon size={14} />
-                          {link.name}
-                        </Link>
-                      ))}
+                    {accountLinks.map((link) => (
+                      <Link
+                        key={link.name}
+                        to={link.href}
+                        className={cn(
+                          "flex items-center gap-3 px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                          link.prominent ? "bg-white text-black hover:bg-neutral-200" : 
+                          "text-white/50 hover:text-white hover:bg-white/5"
+                        )}
+                      >
+                        <link.icon size={14} />
+                        {link.name}
+                      </Link>
+                    ))}
                   </div>
                 </motion.div>
               )}
@@ -258,44 +251,6 @@ export const MainHeader = () => {
           </button>
         </div>
       </div>
-
-      {/* 2. Unified Account Login Modal */}
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
-          <div className="bg-black border border-white/20 p-8 max-w-md w-full space-y-6 relative shadow-2xl">
-            <button 
-              onClick={() => setShowLoginModal(false)}
-              className="absolute top-4 right-4 text-white/40 hover:text-white"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="space-y-1">
-              <span className="text-[9px] font-black uppercase tracking-[0.4em] text-white/40">SoundClick Gateway</span>
-              <h3 className="text-2xl font-black uppercase text-white tracking-tight">Producer & Fan Login</h3>
-            </div>
-
-            <div className="space-y-4">
-              <button 
-                type="button"
-                onClick={async () => {
-                  try {
-                    const provider = new GoogleAuthProvider();
-                    await signInWithPopup(auth, provider);
-                    setShowLoginModal(false);
-                  } catch (err: any) {
-                    console.error('Google sign-in error:', err);
-                    alert(err?.message || 'Google sign-in failed');
-                  }
-                }}
-                className="w-full py-4 bg-white text-black font-black uppercase tracking-[0.2em] text-xs hover:bg-neutral-200 transition-all flex items-center justify-center gap-3"
-              >
-                Sign In With Google
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Mobile/iPad Navigation Overlay */}
       <div 
