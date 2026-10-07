@@ -99,10 +99,6 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
     directPrice: '49.99',
     directPriceLabel: 'Direct Track Buyout',
     directCheckoutUrl: '',
-    payhipProductId: editingBeat?.payhipProductId || '',
-    payhipProductKey: editingBeat?.payhipProductKey || '',
-    payhipCheckoutUrl: editingBeat?.payhipCheckoutUrl || '',
-    payhipEnabled: editingBeat?.payhipEnabled || false,
     isFreeDownload: false,
     freeDownloadEmailRequired: false,
     beehiivFormUrl: BEEHIIV_CONFIG.FORM_ACTION_URL,
@@ -150,60 +146,48 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
   const [tagInput, setTagInput] = useState('');
   const [copiedIframe, setCopiedIframe] = useState(false);
 
-  // Internet Archive Extraction & Validation Stage States
-  const [iaStatus, setIaStatus] = useState<'idle' | 'fetching' | 'extracting' | 'validating' | 'ready' | 'error'>('idle');
-  const [iaError, setIaError] = useState<string | null>(null);
+  // Direct File Upload Handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'audio' | 'artwork' | 'stems') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  useEffect(() => {
-    if (activeSection === 2 && formData.audioUrl) {
-      setIaStatus('fetching');
-      setIaError(null);
-
-      const triggerValidation = async () => {
-        try {
-          // Paced processing transition
-          await new Promise(r => setTimeout(r, 800));
-          setIaStatus('extracting');
-          await new Promise(r => setTimeout(r, 600));
-          
-          const res = await fetch('/api/archive/validate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urlOrId: formData.audioUrl })
-          });
-          const data = await res.json();
-          
-          if (!data.success) {
-            setIaStatus('error');
-            setIaError(data.error || 'Failed to extract playable audio file.');
-            return;
-          }
-
-          setIaStatus('validating');
-          await new Promise(r => setTimeout(r, 800));
-
-          // Set extracted, validated audio details into form state
-          setFormData(prev => ({
-            ...prev,
-            audioUrl: data.playableUrl,
-            audioFileName: data.fileName,
-            audioFormatCodec: `${data.format} Master`,
-            sampleRate: '44.1 kHz',
-            bitDepth: '24-bit HD'
-          }));
-
-          setIaStatus('ready');
-        } catch (err: any) {
-          setIaStatus('error');
-          setIaError(err.message || 'An unexpected error occurred during audio validation.');
-        }
-      };
-
-      triggerValidation();
+    if (category === 'audio') {
+      if (file.name.toLowerCase().endsWith('.wav')) {
+        alert('WAV format is prohibited. Only MP3 and M4A master files are allowed.');
+        return;
+      }
+      setIsUploadingAudio(true);
+    } else if (category === 'artwork') {
+      setIsUploadingArtwork(true);
+    } else if (category === 'stems') {
+      setIsUploadingStems(true);
     }
-  }, [activeSection, formData.audioUrl]);
 
-  // BPM Tap Tempo Handler
+    try {
+      const res = await fetch(`/api/storage/upload?category=${category}&filename=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        body: file
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        if (category === 'audio') {
+          setFormData(prev => ({ ...prev, audioUrl: data.url, audioFileName: file.name }));
+        } else if (category === 'artwork') {
+          setFormData(prev => ({ ...prev, artworkUrl: data.url, coverArtName: file.name }));
+        } else if (category === 'stems') {
+          setFormData(prev => ({ ...prev, stemsUrl: data.url, stemZipFileName: file.name }));
+        }
+      } else {
+        alert(data.error || 'Upload failed');
+      }
+    } catch (err: any) {
+      alert('Upload error: ' + (err?.message || err));
+    } finally {
+      if (category === 'audio') setIsUploadingAudio(false);
+      if (category === 'artwork') setIsUploadingArtwork(false);
+      if (category === 'stems') setIsUploadingStems(false);
+    }
+  };
   const handleBpmTap = () => {
     const now = Date.now();
     const stamps = [...formData.tapTimeStamps, now].slice(-5);
@@ -409,8 +393,6 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
         freeDownloadEmailRequired: formData.isFreeDownload ? formData.freeDownloadEmailRequired : false,
         freeDownloadType: (formData.freeDownloadEmailRequired ? 'email' : 'none') as 'email' | 'social' | 'none',
         beehiivFormUrl: formData.beehiivFormUrl || '',
-        payhipProductId: formData.payhipProductId || undefined,
-        payhipCheckoutUrl: formData.payhipCheckoutUrl || undefined,
         playsCount: 0,
         licenses: formData.pricingMode === 'direct' ? {
           basic: { price: parseFloat(formData.directPrice) || 49.99, enabled: true },
@@ -566,31 +548,9 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <Music size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Internet Archive Audio File</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">2. Master Audio Upload</h3>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Manual Internet Archive Workflow</span>
-            </div>
-
-            <div className="p-5 bg-purple-950/20 border border-purple-500/20 rounded-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-black uppercase text-purple-300">
-                  <Globe size={14} /> Internet Archive Audio Workflow (iPad & Mobile Friendly)
-                </div>
-                <a
-                  href="https://archive.org/create/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-[0.2em] text-[10px] transition-all flex items-center gap-2 rounded-xs shadow-lg"
-                >
-                  Open Internet Archive Upload <ExternalLink size={12} />
-                </a>
-              </div>
-              <p className="text-[11px] text-white/70 leading-relaxed font-medium">
-                1. Tap <strong className="text-white">Open Internet Archive Upload</strong> to upload your master MP3 or M4A file on archive.org.<br />
-                2. Once processing is complete, copy your permanent Internet Archive file/download URL.<br />
-                3. Paste the URL below into <strong className="text-white">Paste Internet Archive File URL</strong> and click <strong className="text-white">Save Audio URL</strong>.<br />
-                <span className="text-red-400 font-bold">Note: WAV format is permanently prohibited. Only high-resolution MP3 and M4A master files are supported.</span>
-              </p>
+              <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">MP3 / M4A Master Files</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -599,124 +559,44 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Untagged Master *</span>
-                    <h4 className="text-lg font-black text-white uppercase">Internet Archive Audio File</h4>
+                    <h4 className="text-lg font-black text-white uppercase">Upload MP3 or M4A File</h4>
                   </div>
                   <FileAudio size={24} className="text-white/40" />
                 </div>
 
                 <p className="text-[10px] text-white/40 uppercase font-medium">
-                  Direct public link used for audio playback & lease download delivery.
+                  Select your master audio file directly. WAV format is prohibited.
                 </p>
 
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                      Paste Internet Archive File URL *
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input 
-                        type="url"
-                        value={formData.audioUrl}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData(prev => ({
-                            ...prev,
-                            audioUrl: val,
-                            audioFileName: val ? (val.split('/').pop() || 'master_audio.mp3') : '',
-                          }));
-                        }}
-                        placeholder="https://archive.org/download/.../master.mp3"
-                        className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-4 text-xs font-mono text-white outline-none transition-colors"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const check = validateStorageUrl(formData.audioUrl, 'audio');
-                          if (check.valid) {
-                            alert(`✓ Internet Archive Audio URL saved successfully!\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: Internet Archive`);
-                          } else {
-                            alert(`Validation Error: ${check.error}`);
-                          }
-                        }}
-                        className="px-6 py-4 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
-                      >
-                        Save Audio URL
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Validation State Display */}
-                  <div className="text-[10px] font-mono">
-                    {formData.audioUrl ? (
-                      audioValidation.valid ? (
-                        <div className="space-y-3 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 font-bold uppercase text-emerald-400">
-                              <CheckCircle size={14} /> ✓ Internet Archive Audio saved
-                            </span>
-                            <span className="text-[9px] uppercase px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-xs">
-                              Active
-                            </span>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
-                            <div>File type: <span className="text-white font-bold">{audioValidation.fileType?.toUpperCase() || 'MP3'}</span></div>
-                            <div>Storage provider: <span className="text-white font-bold">Internet Archive</span></div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const audio = new Audio(formData.audioUrl);
-                                audio.play().catch(() => alert('Could not play stream from Internet Archive URL. Please verify link is publicly accessible.'));
-                              }}
-                              className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black font-black uppercase text-[9px] tracking-wider rounded-xs transition-colors"
-                            >
-                              ▶ Test Stream
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(formData.audioUrl);
-                                alert('Internet Archive URL copied to clipboard');
-                              }}
-                              className="px-3 py-2 bg-white/10 hover:bg-white text-white hover:text-black font-black uppercase text-[9px] tracking-wider rounded-xs transition-colors"
-                            >
-                              Copy URL
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newUrl = prompt('Enter new Internet Archive Audio File URL:', formData.audioUrl);
-                                if (newUrl !== null) {
-                                  const trimmed = newUrl.trim();
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    audioUrl: trimmed,
-                                    audioFileName: trimmed ? (trimmed.split('/').pop() || 'master_audio.mp3') : '',
-                                  }));
-                                }
-                              }}
-                              className="px-3 py-2 bg-white/10 hover:bg-purple-600 text-white font-black uppercase text-[9px] tracking-wider rounded-xs transition-colors"
-                            >
-                              Replace URL
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-sm flex items-center gap-2 font-bold uppercase">
-                          <AlertTriangle size={14} /> {audioValidation.error}
-                        </div>
-                      )
-                    ) : (
-                      <span className="text-white/40 uppercase">
-                        ○ Paste your Internet Archive MP3 or M4A URL above
+                  <label className="block w-full cursor-pointer">
+                    <div className="p-6 border-2 border-dashed border-white/20 hover:border-purple-500 bg-white/5 rounded-sm flex flex-col items-center justify-center gap-2 transition-all">
+                      <Upload size={24} className="text-purple-400" />
+                      <span className="text-xs font-black uppercase tracking-wider text-white">
+                        {isUploadingAudio ? 'Uploading Audio File...' : 'Choose MP3 / M4A File'}
                       </span>
-                    )}
-                  </div>
+                      {formData.audioFileName && (
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold truncate max-w-xs">
+                          Selected: {formData.audioFileName}
+                        </span>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="audio/mp3,audio/m4a,audio/mpeg,audio/mp4" 
+                      onChange={(e) => handleFileUpload(e, 'audio')}
+                      className="hidden"
+                      disabled={isUploadingAudio}
+                    />
+                  </label>
+
+                  {formData.audioUrl && (
+                    <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm text-[10px] font-mono">
+                      <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
+                        <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ Audio Uploaded & Saved</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -724,32 +604,48 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
               <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-4 relative group hover:border-purple-500/40 transition-all">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Pre-Tagged Option</span>
-                    <h4 className="text-lg font-black text-white uppercase">DAW Watermarked Link</h4>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Pre-Tagged Preview</span>
+                    <h4 className="text-lg font-black text-white uppercase">DAW Watermarked Preview</h4>
                   </div>
                   <Music size={24} className="text-white/40" />
                 </div>
 
                 <p className="text-[10px] text-white/40 uppercase font-medium">
-                  Direct Direct link to audio pre-stamped with your voice tag (optional).
+                  Select audio pre-stamped with your voice tag (optional).
                 </p>
 
                 <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                      Direct Watermarked URL (Optional)
-                    </label>
+                  <label className="block w-full cursor-pointer">
+                    <div className="p-4 border border-white/15 hover:border-purple-500 bg-white/5 rounded-sm flex items-center justify-center gap-2 transition-all">
+                      <Music size={16} className="text-purple-400" />
+                      <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                        Choose Watermarked Preview
+                      </span>
+                    </div>
                     <input 
-                      type="url" 
-                      value={formData.taggedAudioUrl}
-                      onChange={(e) => setFormData({ ...formData, taggedAudioUrl: e.target.value, isPreTaggedUpload: Boolean(e.target.value) })}
-                      placeholder="https://custom.com/download/tagged-preview.mp3"
-                      className="w-full bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
+                      type="file" 
+                      accept="audio/mp3,audio/m4a,audio/mpeg,audio/mp4" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const res = await fetch(`/api/storage/upload?category=audio&filename=${encodeURIComponent(file.name)}`, {
+                            method: 'POST',
+                            body: file
+                          });
+                          const data = await res.json();
+                          if (data.url) {
+                            setFormData(prev => ({ ...prev, taggedAudioUrl: data.url, isPreTaggedUpload: true }));
+                          }
+                        }
+                      }}
+                      className="hidden"
                     />
-                  </div>
-                  <span className="text-[9px] font-mono text-white/40 uppercase block">
-                    {formData.taggedAudioUrl ? '✓ Watermarked Preview URL Active' : 'Leave empty to auto-use untagged master stream'}
-                  </span>
+                  </label>
+                  {formData.taggedAudioUrl && (
+                    <span className="text-[9px] font-mono text-emerald-400 uppercase block font-bold">
+                      ✓ Watermarked Preview Attached
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -762,7 +658,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <Archive size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">3. Stems (Direct ZIP) — Optional</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">3. Stems (Multi-Track ZIP) — Optional</h3>
               </div>
               <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Multi-Track Archive</span>
             </div>
@@ -771,81 +667,44 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
                   <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Trackout ZIP Archive</span>
-                  <h4 className="text-lg font-black text-white uppercase">VALLEYFILE ZIP FILE URL</h4>
+                  <h4 className="text-lg font-black text-white uppercase">Upload Stems Bundle (.ZIP)</h4>
                 </div>
                 <Archive size={24} className="text-white/40" />
               </div>
 
               <p className="text-[10px] text-white/40 uppercase font-medium">
-                Upload your multi-track stem bundle (.ZIP) manually to Direct and paste the public direct link below.
+                Select your multi-track stem bundle (.ZIP) file directly.
               </p>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                    VALLEYFILE ZIP FILE URL
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input 
-                      type="url"
-                      value={formData.stemsUrl}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setFormData(prev => ({
-                          ...prev,
-                          stemsUrl: val,
-                          stemZipFileName: val ? (val.split('/').pop() || 'stems.zip') : '',
-                        }));
-                      }}
-                      placeholder="[ Paste Direct ZIP URL here ]"
-                      className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!formData.stemsUrl) {
-                          alert('Please enter a Direct ZIP URL first.');
-                          return;
-                        }
-                        const check = validateStorageUrl(formData.stemsUrl, 'stems');
-                        if (check.valid) {
-                          alert(`✓ Direct ZIP URL saved\nFile type: ZIP\nStorage provider: Direct`);
-                        } else {
-                          alert(`Validation Error: ${check.error}`);
-                        }
-                      }}
-                      className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
-                    >
-                      Validate URL
-                    </button>
+                <label className="block w-full cursor-pointer">
+                  <div className="p-6 border-2 border-dashed border-white/20 hover:border-purple-500 bg-white/5 rounded-sm flex flex-col items-center justify-center gap-2 transition-all">
+                    <Archive size={24} className="text-purple-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-white">
+                      {isUploadingStems ? 'Uploading Stems Archive...' : 'Choose Stems (.ZIP) File'}
+                    </span>
+                    {formData.stemZipFileName && (
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold truncate max-w-xs">
+                        Selected: {formData.stemZipFileName}
+                      </span>
+                    )}
                   </div>
-                </div>
+                  <input 
+                    type="file" 
+                    accept=".zip,application/zip,application/x-zip-compressed" 
+                    onChange={(e) => handleFileUpload(e, 'stems')}
+                    className="hidden"
+                    disabled={isUploadingStems}
+                  />
+                </label>
 
-                <div className="text-[10px] font-mono">
-                  {formData.stemsUrl ? (
-                    (() => {
-                      const stemsCheck = validateStorageUrl(formData.stemsUrl, 'stems');
-                      return stemsCheck.valid ? (
-                        <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
-                          <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
-                            <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ Direct ZIP URL saved</span>
-                            <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Attached</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
-                            <div>File type: <span className="text-white font-bold">ZIP</span></div>
-                            <div>Storage provider: <span className="text-white font-bold">Direct</span></div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-sm flex items-center gap-1.5 font-bold uppercase">
-                          <AlertTriangle size={13} /> {stemsCheck.error}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <span className="text-white/40 uppercase">Optional for Unlimited & Exclusive license tiers</span>
-                  )}
-                </div>
+                {formData.stemsUrl && (
+                  <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm text-[10px] font-mono">
+                    <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
+                      <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ Stems Archive Uploaded & Attached</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -857,7 +716,7 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <ImageIcon size={18} className="text-purple-400" />
-                <h3 className="text-2xl font-black uppercase text-white tracking-tight">4. Cover Artwork (Direct)</h3>
+                <h3 className="text-2xl font-black uppercase text-white tracking-tight">4. Cover Artwork Upload</h3>
               </div>
               <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">JPG, JPEG, PNG, WebP</span>
             </div>
@@ -878,71 +737,33 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
 
               <div className="md:col-span-8 space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-xl font-black uppercase text-white">VALLEYFILE ARTWORK FILE URL</h4>
+                  <h4 className="text-xl font-black uppercase text-white">Cover Artwork File</h4>
                   <p className="text-xs text-white/40 uppercase tracking-wider">
-                    Upload artwork manually to Direct and paste the public direct URL below. Supported: JPG, JPEG, PNG, WebP.
+                    Select your cover art image directly. Supported formats: JPG, JPEG, PNG, WebP.
                   </p>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                      VALLEYFILE ARTWORK FILE URL *
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input 
-                        type="url"
-                        value={formData.artworkUrl}
-                        onChange={(e) => setFormData({ ...formData, artworkUrl: e.target.value })}
-                        placeholder="[ Paste Direct image URL here ]"
-                        className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-3 text-xs font-mono text-white outline-none transition-colors"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!formData.artworkUrl) {
-                            alert('Please enter a Direct artwork URL first.');
-                            return;
-                          }
-                          const check = validateStorageUrl(formData.artworkUrl, 'artwork');
-                          if (check.valid) {
-                            alert(`✓ Direct Artwork URL saved\nFile type: ${check.fileType?.toUpperCase()}\nStorage provider: Direct`);
-                          } else {
-                            alert(`Validation Error: ${check.error}`);
-                          }
-                        }}
-                        className="px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black uppercase tracking-widest transition-colors rounded-sm shrink-0"
-                      >
-                        Validate URL
-                      </button>
+                  <label className="block w-full cursor-pointer">
+                    <div className="p-6 border-2 border-dashed border-white/20 hover:border-purple-500 bg-white/5 rounded-sm flex flex-col items-center justify-center gap-2 transition-all">
+                      <ImageIcon size={24} className="text-purple-400" />
+                      <span className="text-xs font-black uppercase tracking-wider text-white">
+                        {isUploadingArtwork ? 'Uploading Cover Image...' : 'Choose Cover Image File'}
+                      </span>
+                      {formData.coverArtName && (
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold truncate max-w-xs">
+                          Selected: {formData.coverArtName}
+                        </span>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="text-[10px] font-mono">
-                    {formData.artworkUrl ? (
-                      (() => {
-                        const artCheck = validateStorageUrl(formData.artworkUrl, 'artwork');
-                        return artCheck.valid ? (
-                          <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
-                            <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
-                              <span className="flex items-center gap-1.5"><CheckCircle size={13} /> ✓ Direct Artwork URL saved</span>
-                              <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Verified</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-[9px] text-white/70 border-t border-emerald-500/20 pt-2">
-                              <div>File type: <span className="text-white font-bold">{artCheck.fileType?.toUpperCase() || 'JPG'}</span></div>
-                              <div>Storage provider: <span className="text-white font-bold">Direct</span></div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-sm flex items-center gap-1.5 font-bold uppercase">
-                            <AlertTriangle size={13} /> {artCheck.error}
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <span className="text-white/40 uppercase">○ Paste your Direct image URL above</span>
-                    )}
-                  </div>
+                    <input 
+                      type="file" 
+                      accept="image/jpeg,image/jpg,image/png,image/webp" 
+                      onChange={(e) => handleFileUpload(e, 'artwork')}
+                      className="hidden"
+                      disabled={isUploadingArtwork}
+                    />
+                  </label>
                 </div>
 
                 <div className="flex flex-wrap gap-3 pt-2">
@@ -1102,29 +923,6 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                   <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Direct Single Buyout Pricing</span>
                   <span className="text-[9px] font-mono text-emerald-300 uppercase">License Tiers Bypassed</span>
                 </div>
-                
-                <div className="space-y-4 pt-2">
-                    <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-widest text-emerald-300/60 block">Payhip Product ID</label>
-                        <input
-                            type="text"
-                            value={formData.payhipProductId}
-                            onChange={(e) => setFormData({ ...formData, payhipProductId: e.target.value })}
-                            className="w-full bg-black border border-emerald-500/30 p-2 text-xs font-mono text-white"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-widest text-emerald-300/60 block">Payhip Checkout URL</label>
-                        <input
-                            type="url"
-                            value={formData.payhipCheckoutUrl}
-                            onChange={(e) => setFormData({ ...formData, payhipCheckoutUrl: e.target.value })}
-                            className="w-full bg-black border border-emerald-500/30 p-2 text-xs font-mono text-white"
-                        />
-                    </div>
-                </div>
-              </div>
-            )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -1332,9 +1130,8 @@ export const BeatUploader = ({ editingBeat }: { editingBeat?: Beat }) => {
                 </div>
               </div>
             )}
-
-
-        {/* 6. METADATA SECTION */}
+          </div>
+        )}
         {(activeSection === 6 || activeSection === 8) && (
           <div className="p-8 bg-neutral-950 border border-white/10 rounded-sm space-y-8">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">

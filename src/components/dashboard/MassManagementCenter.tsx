@@ -355,7 +355,7 @@ export const MassManagementCenter: React.FC = () => {
 
   // CSV Export Function
   const exportCatalogCsv = () => {
-    const headers = ['Beat ID', 'Title', 'Genre', 'Tags', 'BPM', 'Key', 'Price ($)', 'Published', 'Archived', 'Payhip Key'];
+    const headers = ['Beat ID', 'Title', 'Genre', 'Tags', 'BPM', 'Key', 'Price ($)', 'Published', 'Archived'];
     const rows = beats.map(b => [
       b.id,
       `"${b.title.replace(/"/g, '""')}"`,
@@ -365,8 +365,7 @@ export const MassManagementCenter: React.FC = () => {
       b.key,
       b.licenses?.basic?.price || 29.99,
       b.published ? 'TRUE' : 'FALSE',
-      b.isArchived ? 'TRUE' : 'FALSE',
-      b.payhipProductKey || ''
+      b.isArchived ? 'TRUE' : 'FALSE'
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -603,7 +602,6 @@ export const MassManagementCenter: React.FC = () => {
                   <th className="p-4">Genre / BPM / Key</th>
                   <th className="p-4">Price (Basic)</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Payhip Key</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -653,9 +651,6 @@ export const MassManagementCenter: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="p-4 font-mono text-[9px] text-purple-300">
-                        {beat.payhipProductKey || 'Not Linked'}
-                      </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button 
@@ -697,7 +692,7 @@ export const MassManagementCenter: React.FC = () => {
                 type="file" 
                 ref={fileInputRef}
                 multiple 
-                accept="audio/mp3,audio/m4a,audio/wav"
+                accept="audio/mp3,audio/m4a"
                 onChange={handleBulkFilesSelect}
                 className="hidden"
               />

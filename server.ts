@@ -259,34 +259,118 @@ async function startServer() {
     }
   });
 
-  // Upload endpoint for persistent cloud assets
-  app.post('/api/storage/upload', express.raw({ type: '*/*', limit: '150mb' }), (req: Request, res: Response) => {
-    const category = (req.query.category as string) || 'audio';
-    const filename = (req.query.filename as string) || `file_${Date.now()}`;
-    const safeFilename = path.basename(filename);
+  // Upload endpoint for persistent cloud assets with Internet Archive S3 integration
+  app.post('/api/storage/upload', express.raw({ type: '*/*', limit: '150mb' }), async (req: Request, res: Response) => {
+    try {
+      const category = (req.query.category as string) || 'audio';
+      const filename = (req.query.filename as string) || `file_${Date.now()}`;
+      const beatId = (req.query.beatId as string) || '';
+      const safeFilename = path.basename(filename);
+      const lowerName = safeFilename.toLowerCase();
 
-    if (category === 'audio' && safeFilename.toLowerCase().endsWith('.wav')) {
-      return res.status(400).json({ error: 'WAV format is prohibited. Only MP3 and M4A master files are allowed.' });
+      // 1. Strict File Type Policy Validation
+      if (lowerName.endsWith('.wav')) {
+        return res.status(400).json({ error: 'WAV format is strictly prohibited. Only high-resolution MP3 and M4A files are permitted.' });
+      }
+
+      if (category === 'audio' && !lowerName.endsWith('.mp3') && !lowerName.endsWith('.m4a') && !lowerName.endsWith('.mp4') && !lowerName.endsWith('.aac')) {
+        return res.status(400).json({ error: 'Unsupported audio format. Only MP3 and M4A master files are permitted.' });
+      }
+
+      if (category === 'artwork' && !lowerName.endsWith('.jpg') && !lowerName.endsWith('.jpeg') && !lowerName.endsWith('.png') && !lowerName.endsWith('.webp')) {
+        return res.status(400).json({ error: 'Unsupported artwork format. Only JPG, JPEG, PNG, and WebP are permitted.' });
+      }
+
+      if ((category === 'stems' || category === 'pack') && !lowerName.endsWith('.zip') && !lowerName.endsWith('.rar') && !lowerName.endsWith('.7z')) {
+        return res.status(400).json({ error: 'Unsupported archive format. Only .ZIP trackout archives are permitted.' });
+      }
+
+      // Check for Internet Archive Server Credentials
+      const iaAccessKey = (process.env.IA_ACCESS_KEY || '').trim();
+      const iaSecretKey = (process.env.IA_SECRET_KEY || '').trim();
+
+      // Always save locally as local fallback / server cache
+      const targetDir = path.join(storageDir, category);
+      fs.mkdirSync(targetDir, { recursive: true });
+      const targetPath = path.join(targetDir, safeFilename);
+      fs.writeFileSync(targetPath, req.body);
+
+      const protocol = req.protocol || 'https';
+      const host = req.get('host') || 'localhost:3000';
+      const localPublicUrl = `${protocol}://${host}/api/storage/beats/${category}/${safeFilename}`;
+
+      if (iaAccessKey && iaSecretKey) {
+        // Construct deterministic Internet Archive Item Identifier
+        const rawItemId = beatId 
+          ? `kraezelv-${category}-${beatId}` 
+          : `kraezelv-${category}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const itemId = rawItemId.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+
+        const mediaType = category === 'audio' ? 'audio' : category === 'artwork' ? 'image' : 'data';
+        let contentType = 'application/octet-stream';
+        if (lowerName.endsWith('.mp3')) contentType = 'audio/mpeg';
+        else if (lowerName.endsWith('.m4a')) contentType = 'audio/mp4';
+        else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) contentType = 'image/jpeg';
+        else if (lowerName.endsWith('.png')) contentType = 'image/png';
+        else if (lowerName.endsWith('.webp')) contentType = 'image/webp';
+        else if (lowerName.endsWith('.zip')) contentType = 'application/zip';
+
+        const iaS3Url = `https://s3.us.archive.org/${itemId}/${encodeURIComponent(safeFilename)}`;
+
+        console.log(`[IA_STORAGE_UPLOAD_START] Uploading ${safeFilename} (${req.body.length} bytes) to Internet Archive Item: ${itemId}`);
+
+        const iaResponse = await fetch(iaS3Url, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `LOW ${iaAccessKey}:${iaSecretKey}`,
+            'x-archive-auto-make-bucket': '1',
+            'x-archive-meta-mediatype': mediaType,
+            'x-archive-meta-creator': 'KRAEZELV',
+            'x-archive-meta-title': `KRAEZELV ${category.toUpperCase()} - ${safeFilename}`,
+            'Content-Type': contentType,
+            'Content-Length': String(req.body.length)
+          },
+          body: req.body
+        });
+
+        if (!iaResponse.ok) {
+          const errText = await iaResponse.text();
+          console.error(`[IA_STORAGE_UPLOAD_ERROR] HTTP ${iaResponse.status}: ${errText.slice(0, 200)}`);
+          return res.status(500).json({ 
+            success: false, 
+            error: `Internet Archive persistent upload failed: HTTP ${iaResponse.status}. Please check your IA_ACCESS_KEY and IA_SECRET_KEY.` 
+          });
+        }
+
+        const persistentUrl = `https://archive.org/download/${itemId}/${safeFilename}`;
+        console.log(`[IA_STORAGE_UPLOAD_SUCCESS] Stored persistently at ${persistentUrl}`);
+
+        return res.json({
+          success: true,
+          url: persistentUrl,
+          durableUrl: persistentUrl,
+          archiveUrl: persistentUrl,
+          itemId,
+          path: `download/${itemId}/${safeFilename}`,
+          provider: 'internet_archive',
+          size: req.body.length
+        });
+      }
+
+      // If IA credentials are not provided, return local server URL and log diagnostic warning
+      console.log(`[STORAGE_LOCAL_FALLBACK] IA credentials not found in env. Stored locally at ${localPublicUrl}`);
+      return res.json({
+        success: true,
+        url: localPublicUrl,
+        durableUrl: localPublicUrl,
+        path: `beats/${category}/${safeFilename}`,
+        provider: 'local',
+        size: req.body.length
+      });
+    } catch (err: any) {
+      console.error('[STORAGE_UPLOAD_EXCEPTION]', err?.message || err);
+      return res.status(500).json({ success: false, error: err?.message || 'Server Storage Upload Error' });
     }
-
-    const targetDir = path.join(storageDir, category);
-    fs.mkdirSync(targetDir, { recursive: true });
-    const targetPath = path.join(targetDir, safeFilename);
-
-    fs.writeFileSync(targetPath, req.body);
-
-    const protocol = req.protocol || 'https';
-    const host = req.get('host') || 'localhost:3000';
-    const publicUrl = `${protocol}://${host}/api/storage/beats/${category}/${safeFilename}`;
-
-    console.log(`[STORAGE_PERSISTENCE] Uploaded ${safeFilename} (${req.body.length} bytes) -> ${publicUrl}`);
-
-    res.json({
-      success: true,
-      url: publicUrl,
-      path: `beats/${category}/${safeFilename}`,
-      size: req.body.length
-    });
   });
 
   // In-memory cache for resolved direct storage URLs to eliminate manual HEAD redirect resolution latency during byte-range seeks
@@ -932,7 +1016,7 @@ async function startServer() {
 
   // Create pending purchase endpoint
   app.post('/api/purchases/create-pending', express.json(), async (req: Request, res: Response) => {
-    const { beatId, expectedAmount, currency, payhipProductKey } = req.body;
+    const { beatId, expectedAmount, currency } = req.body;
     if (!beatId) {
       return res.status(400).json({ error: 'Missing beatId' });
     }
@@ -947,7 +1031,6 @@ async function startServer() {
           expectedAmount: parseFloat(expectedAmount) || 0,
           currency: currency || 'USD',
           status: 'pending',
-          payhipProductKey: payhipProductKey || null,
           createdAt: new Date().toISOString()
         });
         console.log(`[PURCHASES] Pending purchase created: ${purchaseId}`);
@@ -957,166 +1040,6 @@ async function startServer() {
     }
     
     res.json({ success: true, purchaseId });
-  });
-
-  // Extract and Validate Internet Archive Item/File
-  app.post('/api/archive/validate', express.json(), async (req: Request, res: Response) => {
-    const { urlOrId } = req.body;
-    if (!urlOrId) {
-      return res.status(400).json({ success: false, error: 'Missing URL or Item ID' });
-    }
-
-    // Extract item ID from URL (e.g. https://archive.org/details/my-beat-item -> my-beat-item)
-    let itemId = urlOrId.trim();
-    if (itemId.includes('archive.org/details/')) {
-      itemId = itemId.split('archive.org/details/')[1].split('/')[0];
-    } else if (itemId.includes('archive.org/download/')) {
-      itemId = itemId.split('archive.org/download/')[1].split('/')[0];
-    }
-
-    try {
-      console.log(`[IA_VALIDATION] Validating Internet Archive item ID: ${itemId}`);
-      // 1. Fetch IA Metadata
-      const metaRes = await fetch(`https://archive.org/metadata/${itemId}`);
-      if (!metaRes.ok) {
-        return res.status(400).json({ success: false, error: 'Failed to retrieve Internet Archive item metadata.' });
-      }
-
-      const metaData = await metaRes.json() as any;
-      if (!metaData || !metaData.files || metaData.files.length === 0) {
-        return res.status(400).json({ success: false, error: 'Internet Archive item has no files.' });
-      }
-
-      // 2. Identify correct MP3 or M4A file (WAV is permanently excluded)
-      const audioFile = metaData.files.find((f: any) => {
-        const name = f.name.toLowerCase();
-        return (name.endsWith('.mp3') || name.endsWith('.m4a')) && !name.includes('_vbr.mp3') && !name.includes('_sample');
-      });
-
-      if (!audioFile) {
-        return res.status(400).json({ success: false, error: 'No playable MP3 or M4A file found in this Internet Archive item (WAV is prohibited).' });
-      }
-
-      const playableUrl = `https://archive.org/download/${itemId}/${audioFile.name}`;
-
-      // 3. Validate Playable URL by sending a HEAD request
-      const valRes = await fetch(playableUrl, { method: 'HEAD' });
-      const mimeType = valRes.headers.get('content-type') || '';
-      const contentLength = parseInt(valRes.headers.get('content-length') || '0', 10);
-
-      // Verify MIME type is audio
-      if (!mimeType.includes('audio/') && !mimeType.includes('application/octet-stream')) {
-        return res.status(400).json({ success: false, error: `Invalid audio MIME type: ${mimeType}` });
-      }
-
-      res.json({
-        success: true,
-        itemId,
-        fileName: audioFile.name,
-        size: contentLength || audioFile.size,
-        format: audioFile.name.endsWith('.m4a') ? 'M4A' : 'MP3',
-        playableUrl,
-        proxyUrl: `/api/audio/proxy?url=${encodeURIComponent(playableUrl)}`,
-        mimeType
-      });
-    } catch (err: any) {
-      console.error('[IA_VALIDATION_ERROR]', err);
-      res.status(500).json({ success: false, error: `Validation error: ${err.message}` });
-    }
-  });
-
-  // Payhip Webhook
-  app.post('/api/webhooks/payhip', express.json(), async (req: Request, res: Response) => {
-    const event = req.body;
-    const signature = event?.signature;
-    const apiKey = process.env.PAYHIP_API_KEY;
-    
-    if (apiKey) {
-      const crypto = require('crypto');
-      const expectedSignature = crypto.createHash('sha256').update(apiKey.trim()).digest('hex');
-      
-      if (typeof signature !== 'string' || signature.length !== expectedSignature.length) {
-        console.error('[PAYHIP_WEBHOOK] Signature mismatch or invalid format');
-        return res.status(401).send('Invalid signature');
-      }
-
-      const isBufferEqual = crypto.timingSafeEqual(
-        Buffer.from(signature, 'utf8'),
-        Buffer.from(expectedSignature, 'utf8')
-      );
-
-      if (!isBufferEqual) {
-        console.error('[PAYHIP_WEBHOOK] Signature verification failed');
-        return res.status(401).send('Invalid signature');
-      }
-    }
-    
-    const { id, email, currency, price, items, type, metadata, custom_metadata } = event;
-    const resolvedMetadata = metadata || custom_metadata || {};
-    const beatId = resolvedMetadata.beatId;
-    const storePurchaseId = resolvedMetadata.storePurchaseId;
-    const payhipProductKey = items && items[0]?.product_key;
-    const payhipProductId = items && items[0]?.product_id;
-
-    // Convert price to dollars (since it is represented in cents/pennies)
-    const priceInDollars = typeof price === 'number' ? price / 100 : 0;
-
-    if (type === 'paid') {
-       const purchaseId = storePurchaseId || id;
-       
-       if (db) {
-         // Idempotency check: check if purchase already exists and is PAID
-         const purchaseRef = db.collection('purchases').doc(purchaseId);
-         const doc = await purchaseRef.get();
-         if (doc.exists && doc.data()?.status === 'PAID') {
-           console.log('[PAYHIP_WEBHOOK] Duplicate webhook delivery. Already marked PAID.');
-           return res.status(200).send('OK');
-         }
-
-         // Match transaction to correct beat (by beatId metadata or payhipProductKey fallback)
-         let finalBeatId = beatId;
-         if (!finalBeatId && payhipProductKey) {
-           const beatsSnap = await db.collection('beats').where('payhipProductKey', '==', payhipProductKey).get();
-           if (!beatsSnap.empty) {
-             finalBeatId = beatsSnap.docs[0].id;
-           }
-         }
-
-         await purchaseRef.set({
-           purchaseId,
-           payhipTransactionId: id,
-           beatId: finalBeatId || null,
-           buyerEmail: email || null,
-           expectedAmount: priceInDollars,
-           currency: currency || 'USD',
-           status: 'PAID',
-           payhipProductKey: payhipProductKey || null,
-           payhipProductId: payhipProductId || null,
-           createdAt: doc.exists ? (doc.data()?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-           paidAt: new Date().toISOString()
-         }, { merge: true });
-
-         console.log(`[PAYHIP_WEBHOOK] Purchase ${purchaseId} successfully marked as PAID`);
-         
-         // Trigger Sale Notification
-         await sendPushNotification({
-           title: 'KRAEZELV Store',
-           body: `Payhip Sale: Beat purchased successfully!`,
-           url: '/dashboard/sales'
-         });
-       }
-    } else if (type === 'refunded') {
-       const purchaseId = storePurchaseId || id;
-       if (db) {
-         const purchaseRef = db.collection('purchases').doc(purchaseId);
-         await purchaseRef.set({
-           status: 'REFUNDED',
-           refundedAt: new Date().toISOString()
-         }, { merge: true });
-         console.log(`[PAYHIP_WEBHOOK] Purchase ${purchaseId} marked as REFUNDED`);
-       }
-    }
-    res.status(200).send('OK');
   });
 
   // Vite middleware integration

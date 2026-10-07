@@ -91,34 +91,23 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
   };
 
   const handleInstantCheckout = () => {
-    if (beat.payhipEnabled && beat.payhipProductKey) {
-      // Register pending transaction in dynamic Firestore record and redirect straight to the single-item checkout path
-      fetch('/api/purchases/create-pending', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          beatId: beat.id,
-          expectedAmount: activeOption.price,
-          currency: 'USD',
-          payhipProductKey: beat.payhipProductKey
-        })
+    fetch('/api/purchases/create-pending', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        beatId: beat.id,
+        expectedAmount: activeOption.price,
+        currency: 'USD'
       })
-      .then(res => res.json())
-      .then(data => {
-        const purchaseId = data.purchaseId;
-        let checkoutUrl = `https://payhip.com/buy?link=${beat.payhipProductKey}&metadata[beatId]=${beat.id}`;
-        if (purchaseId) {
-          checkoutUrl += `&metadata[storePurchaseId]=${purchaseId}`;
-        }
-        window.location.href = checkoutUrl;
-      })
-      .catch(() => {
-        window.location.href = `https://payhip.com/buy?link=${beat.payhipProductKey}&metadata[beatId]=${beat.id}`;
-      });
-    } else {
-      // Fallback checkout link
-      window.location.href = beat.payhipCheckoutUrl || '#';
-    }
+    })
+    .then(() => {
+      addToCart(beat, activeOption.id, activeOption.price);
+      onClose();
+    })
+    .catch(() => {
+      addToCart(beat, activeOption.id, activeOption.price);
+      onClose();
+    });
   };
 
   return (
@@ -247,7 +236,7 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
                 onClick={handleInstantCheckout}
                 className="w-full py-4 border border-white/20 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/[0.05] transition-all"
               >
-                <Lock size={12} /> INSTANT PAYHIP CHECKOUT
+                <Lock size={12} /> INSTANT CHECKOUT
               </button>
             </div>
           </div>

@@ -31,6 +31,7 @@ import { TypeBeatSchema } from '../components/seo/TypeBeatSchema';
 
 export const HomePage = () => {
   const { beats } = useBeatCatalogStore();
+  const { packs } = useBeatPackStore();
   const [deepLinkBeat, setDeepLinkBeat] = useState<any>(null);
 
   useEffect(() => {
@@ -51,8 +52,6 @@ export const HomePage = () => {
       </main>
     );
   }
-
-  const { packs } = useBeatPackStore();
 
   return (
     <main className="bg-black overflow-hidden">

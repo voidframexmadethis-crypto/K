@@ -182,7 +182,7 @@ export const BeatPackUploader = () => {
             Beat Pack Uploader
           </h2>
           <p className="text-white/40 text-xs font-bold uppercase tracking-widest mt-1">
-            Publish Complete Trackout Bundles via Manual Internet Archive Workflow
+            Publish Complete Trackout Bundles with Direct Audio Storage
           </p>
         </div>
       </div>
@@ -194,29 +194,17 @@ export const BeatPackUploader = () => {
             <Archive size={18} className="text-purple-400" />
             <h3 className="text-2xl font-black uppercase text-white tracking-tight">Create New Beat Pack</h3>
           </div>
-          <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Manual Internet Archive URL</span>
+          <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">Direct File Upload</span>
         </div>
 
-        {/* Workflow Instructions */}
-        <div className="p-5 bg-purple-950/20 border border-purple-500/20 rounded-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-black uppercase text-purple-300">
-              <Globe size={14} /> Manual Internet Archive Workflow (iPad & Mobile Friendly)
-            </div>
-            <a
-              href="https://archive.org/create/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-[0.2em] text-[10px] transition-all flex items-center gap-2 rounded-xs shadow-lg"
-            >
-              Open Internet Archive Upload <ExternalLink size={12} />
-            </a>
+        {/* Automatic Persistent Storage Info */}
+        <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-sm flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-black uppercase text-purple-300">
+            <Sparkles size={14} /> Automatic Persistent Storage
           </div>
-          <p className="text-[11px] text-white/70 leading-relaxed font-medium">
-            1. Tap <strong className="text-white">Open Internet Archive Upload</strong> above to upload your ZIP file on archive.org.<br />
-            2. Once created, copy your permanent Internet Archive item or download URL (e.g., <code className="text-purple-300">archive.org/details/...</code> or <code className="text-purple-300">archive.org/download/...</code>).<br />
-            3. Paste the URL below and click <strong className="text-white">Save Pack</strong>.
-          </p>
+          <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest">
+            Files stream directly to persistent cloud storage
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -255,76 +243,94 @@ export const BeatPackUploader = () => {
           />
         </div>
 
-        {/* INTERNET ARCHIVE FILE URL STEP */}
+        {/* FILE UPLOAD STEP */}
         <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-4">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
-              <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Step 2: Storage Reference *</span>
-              <h4 className="text-lg font-black text-white uppercase">Internet Archive File URL</h4>
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Pack Archive (.ZIP) *</span>
+              <h4 className="text-lg font-black text-white uppercase">Upload Pack Archive File</h4>
             </div>
             <Archive size={24} className="text-white/40" />
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/60 block">
-                Paste Internet Archive File URL *
-              </label>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input 
-                  type="url"
-                  value={zipUrl}
-                  onChange={(e) => setZipUrl(e.target.value)}
-                  placeholder="https://archive.org/details/... or https://archive.org/download/..."
-                  className="flex-1 bg-white/5 border border-white/20 focus:border-purple-500 p-4 text-xs font-mono text-white outline-none transition-colors"
-                />
-                <a
-                  href="https://archive.org/create/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-6 py-4 bg-white/10 hover:bg-white/20 text-white font-black uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center gap-2 rounded-xs shrink-0"
-                >
-                  <Globe size={14} /> Open Internet Archive Upload
-                </a>
-              </div>
-            </div>
-
-            <div className="text-[10px] font-mono">
-              {zipUrl ? (
-                <div className="space-y-2 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-sm">
-                  <div className="flex items-center justify-between text-emerald-400 font-bold uppercase">
-                    <span className="flex items-center gap-1.5"><CheckCircle size={14} /> ✓ Internet Archive URL provided</span>
-                    <span className="text-[9px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-xs">Ready</span>
-                  </div>
-                  <div className="text-[9px] text-white/70 truncate pt-1">{zipUrl}</div>
-                </div>
-              ) : (
-                <span className="text-white/40 uppercase font-mono">
-                  ○ Paste your archive.org details or download URL above after uploading
+            <label className="block w-full cursor-pointer">
+              <div className="p-6 border-2 border-dashed border-white/20 hover:border-purple-500 bg-white/5 rounded-sm flex flex-col items-center justify-center gap-2 transition-all">
+                <Archive size={24} className="text-purple-400" />
+                <span className="text-xs font-black uppercase tracking-wider text-white">
+                  Choose Beat Pack (.ZIP) File
                 </span>
-              )}
-            </div>
+                {zipUrl && (
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold truncate max-w-xs">
+                    File Attached & Saved
+                  </span>
+                )}
+              </div>
+              <input 
+                type="file"
+                accept=".zip,application/zip,application/x-zip-compressed"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const res = await fetch(`/api/storage/upload?category=stems&filename=${encodeURIComponent(file.name)}`, {
+                      method: 'POST',
+                      body: file
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                      setZipUrl(data.url);
+                    }
+                  } catch (err: any) {
+                    alert('Upload failed: ' + (err?.message || err));
+                  }
+                }}
+                className="hidden"
+              />
+            </label>
           </div>
         </div>
 
-        {/* COVER ARTWORK URL */}
+        {/* COVER ARTWORK */}
         <div className="p-6 bg-white/[0.02] border border-white/10 rounded-sm space-y-4">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
               <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Cover Artwork *</span>
-              <h4 className="text-lg font-black text-white uppercase">Cover Artwork URL</h4>
+              <h4 className="text-lg font-black text-white uppercase">Upload Cover Image</h4>
             </div>
             <ImageIcon size={24} className="text-white/40" />
           </div>
 
           <div className="space-y-2">
-            <input 
-              type="url"
-              value={artworkUrl}
-              onChange={(e) => setArtworkUrl(e.target.value)}
-              placeholder="https://images.unsplash.com/... or image link"
-              className="w-full bg-white/5 border border-white/15 p-4 text-xs font-mono text-white outline-none focus:border-purple-500 transition-colors"
-            />
+            <label className="block w-full cursor-pointer">
+              <div className="p-4 border border-white/15 hover:border-purple-500 bg-white/5 rounded-sm flex items-center justify-center gap-2 transition-all">
+                <ImageIcon size={16} className="text-purple-400" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                  Choose Cover Image File
+                </span>
+              </div>
+              <input 
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const res = await fetch(`/api/storage/upload?category=artwork&filename=${encodeURIComponent(file.name)}`, {
+                      method: 'POST',
+                      body: file
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                      setArtworkUrl(data.url);
+                    }
+                  } catch (err: any) {
+                    alert('Upload failed: ' + (err?.message || err));
+                  }
+                }}
+                className="hidden"
+              />
+            </label>
           </div>
         </div>
 

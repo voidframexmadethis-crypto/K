@@ -20,28 +20,19 @@ export const MiniCart: React.FC = () => {
   };
 
   const handleCheckoutItem = (item: typeof items[0]) => {
-    // Generate a pending purchase record and redirect straight to the single-item Payhip checkout page
+    // Register pending purchase record in Firestore
     fetch('/api/purchases/create-pending', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         beatId: item.beat.id,
         expectedAmount: item.price,
-        currency: 'USD',
-        payhipProductKey: item.beat.payhipProductKey
+        currency: 'USD'
       })
     })
     .then(res => res.json())
-    .then(data => {
-      const purchaseId = data.purchaseId;
-      let checkoutUrl = `https://payhip.com/buy?link=${item.beat.payhipProductKey}&metadata[beatId]=${item.beat.id}`;
-      if (purchaseId) {
-        checkoutUrl += `&metadata[storePurchaseId]=${purchaseId}`;
-      }
-      window.location.href = checkoutUrl;
-    })
-    .catch(() => {
-      window.location.href = `https://payhip.com/buy?link=${item.beat.payhipProductKey}&metadata[beatId]=${item.beat.id}`;
+    .catch(err => {
+      console.warn('[CHECKOUT] Pending purchase registration:', err);
     });
   };
 
@@ -183,39 +174,18 @@ export const MiniCart: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payhip Single-Item Redirection Strategy / Multi-Item Readiness */}
+              {/* Checkout Strategy */}
               <div className="space-y-3 pt-2">
-                {items.length === 1 ? (
-                  <button 
-                    onClick={() => handleCheckoutItem(items[0])}
-                    className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_30px_rgba(147,51,234,0.3)]"
-                  >
-                    <Lock size={12} /> SECURE CHECKOUT <ArrowRight size={14} />
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest block text-center">
-                      Checkout beats individually below (Payhip Single-product Mode):
-                    </span>
-                    {items.map((item, idx) => (
-                      <button 
-                        key={item.id}
-                        onClick={() => handleCheckoutItem(item)}
-                        className="w-full py-3 bg-white/5 border border-white/10 hover:bg-purple-600/20 hover:border-purple-500/30 text-white font-black text-[9px] uppercase tracking-wider flex items-center justify-between px-4 transition-all"
-                      >
-                        <span>{idx+1}. Check Out {item.beat.title}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-purple-400">${item.price.toFixed(2)}</span>
-                          <ArrowRight size={10} />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <button 
+                  onClick={() => items[0] && handleCheckoutItem(items[0])}
+                  className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_30px_rgba(147,51,234,0.3)] cursor-pointer"
+                >
+                  <Lock size={12} /> SECURE CHECKOUT <ArrowRight size={14} />
+                </button>
 
                 <div className="flex items-center justify-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] text-white/30 text-center pt-2">
                   <ShieldCheck size={12} className="text-emerald-500" />
-                  <span>Personal PayPal Payments Processed Safely via Payhip</span>
+                  <span>256-Bit SSL Encrypted Checkout</span>
                 </div>
               </div>
             </>
