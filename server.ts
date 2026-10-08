@@ -24,6 +24,7 @@ JSON.stringify = function (value: any, replacer?: any, space?: any) {
   }
 };
 
+import crypto from 'crypto';
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
@@ -67,6 +68,37 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
+
+// 2Pay API Production Base Endpoint
+const TWOPAY_API_BASE = 'https://api.2pay.io/v1';
+
+interface TwoPayRuntimeConfig {
+  apiKey: string;
+  webhookSecret: string;
+  productId: string;
+  isConfigured: boolean;
+}
+
+// Authoritative Runtime 2Pay Credentials & Single Master Product Resolver
+function resolveTwoPayCredentials(): TwoPayRuntimeConfig {
+  const apiKey = (process.env.TWOPAY_API_KEY || '').trim();
+  const webhookSecret = (process.env.TWOPAY_WEBHOOK_SECRET || '').trim();
+  const productId = (
+    process.env.TWOPAY_PRODUCT_ID ||
+    process.env.TWOPAY_PRODUCT ||
+    process.env.TWOPAY_PRODUCT_BASIC ||
+    'prod_beat'
+  ).trim();
+
+  const isConfigured = Boolean(apiKey);
+
+  return {
+    apiKey,
+    webhookSecret,
+    productId,
+    isConfigured
+  };
+}
 
 // Live & Sandbox PayPal API Production Endpoints
 const PAYPAL_LIVE_API_BASE = 'https://api-m.paypal.com';
@@ -495,6 +527,211 @@ async function startServer() {
         res.status(500).send('Audio proxy error');
       }
     }
+  });
+
+  // ==================== 2PAY INTEGRATION ENDPOINTS ==================== //
+
+  // API status endpoint to check if server-side 2Pay credentials are set in environment
+  app.get('/api/config/2pay', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const config = resolveTwoPayCredentials();
+    res.json({
+      configured: config.isConfigured,
+      apiBase: TWOPAY_API_BASE
+    });
+  });
+
+  // 2Pay Checkout Session Creation Endpoint
+  app.post('/api/2pay/create-checkout', async (req: Request, res: Response) => {
+    const { beatId, licenseType, customPrice, customerEmail, userId, twopayProductId } = req.body;
+
+    if (!beatId) {
+      return res.status(400).json({ success: false, error: 'MISSING_PARAMETERS', message: 'beatId is required.' });
+    }
+
+    const config = resolveTwoPayCredentials();
+    const productId = twopayProductId || config.productId;
+    const finalPrice = parseFloat(customPrice) || 29.99;
+
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol || 'https';
+    const origin = `${protocol}://${host}`;
+
+    const payload = {
+      product_id: productId,
+      amount: finalPrice,
+      currency: 'USD',
+      items: [{ product_id: productId, amount: finalPrice, quantity: 1 }],
+      metadata: {
+        beat_id: beatId,
+        license_type: licenseType || 'custom',
+        custom_price: finalPrice,
+        user_id: userId || '',
+        customer_email: customerEmail || ''
+      },
+      success_url: `${origin}/?purchase=success&beat=${beatId}&license=${licenseType || 'custom'}`,
+      cancel_url: `${origin}/?beat=${beatId}`
+    };
+
+    console.log(`[2PAY_CHECKOUT_START] Creating 2Pay checkout for beat ${beatId} (Custom Price: $${finalPrice}, Product: ${productId})`);
+
+    if (!config.apiKey) {
+      // Development/Fallback mode when TWOPAY_API_KEY is not yet supplied in environment
+      console.log('[2PAY_CHECKOUT_DEMO] TWOPAY_API_KEY not set. Returning mock checkout session.');
+      const demoIdent = `chk_demo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      if (db) {
+        try {
+          await db.collection('purchases').doc(`pur_${demoIdent}`).set({
+            purchaseId: `pur_${demoIdent}`,
+            checkoutId: demoIdent,
+            beatId,
+            licenseType,
+            status: 'pending',
+            paymentProvider: '2pay',
+            customerEmail: customerEmail || 'buyer@kraezelvbeatz.com',
+            userId: userId || '',
+            createdAt: new Date().toISOString()
+          });
+        } catch (err) {
+          console.warn('[2PAY_CHECKOUT_DEMO] Pending purchase save warning:', err);
+        }
+      }
+
+      return res.json({
+        success: true,
+        isDemo: true,
+        checkoutId: demoIdent,
+        ident: demoIdent,
+        checkoutUrl: `${origin}/?purchase=success&beat=${beatId}&license=${licenseType}&session_id=${demoIdent}`,
+        url: `${origin}/?purchase=success&beat=${beatId}&license=${licenseType}&session_id=${demoIdent}`,
+        message: 'Demo checkout initialized. Supply TWOPAY_API_KEY in settings for live production checkout.'
+      });
+    }
+
+    try {
+      const twoPayRes = await fetch(`${TWOPAY_API_BASE}/checkouts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const twoPayData = await twoPayRes.json() as any;
+
+      if (!twoPayRes.ok) {
+        console.error(`[2PAY_CHECKOUT_ERROR] HTTP ${twoPayRes.status}:`, twoPayData);
+        return res.status(twoPayRes.status || 400).json({
+          success: false,
+          error: twoPayData?.error || twoPayData?.message || '2Pay checkout creation failed',
+          details: twoPayData
+        });
+      }
+
+      const ident = twoPayData.id || twoPayData.ident || twoPayData.checkout_id;
+      const url = twoPayData.url || twoPayData.checkout_url || twoPayData.hosted_url || `${TWOPAY_API_BASE}/checkout/${ident}`;
+
+      if (db) {
+        try {
+          await db.collection('purchases').doc(`pur_${ident}`).set({
+            purchaseId: `pur_${ident}`,
+            checkoutId: ident,
+            beatId,
+            licenseType,
+            status: 'pending',
+            paymentProvider: '2pay',
+            customerEmail: customerEmail || '',
+            userId: userId || '',
+            createdAt: new Date().toISOString()
+          });
+        } catch (err) {
+          console.warn('[2PAY_CHECKOUT] Firestore pending purchase record warning:', err);
+        }
+      }
+
+      console.log(`[2PAY_CHECKOUT_SUCCESS] Created checkout ident: ${ident}`);
+      return res.json({
+        success: true,
+        checkoutId: ident,
+        ident,
+        checkoutUrl: url,
+        url,
+        raw: twoPayData
+      });
+    } catch (err: any) {
+      console.error('[2PAY_CHECKOUT_EXCEPTION]', err?.message || err);
+      return res.status(500).json({ success: false, error: err?.message || 'Server error creating 2Pay checkout.' });
+    }
+  });
+
+  // 2Pay Order Signed Webhook Handler
+  app.post('/api/webhooks/2pay', express.json(), async (req: Request, res: Response) => {
+    const config = resolveTwoPayCredentials();
+    const signature = (req.headers['2pay-signature'] || req.headers['x-2pay-signature'] || '') as string;
+    const event = req.body;
+
+    console.log(`[2PAY_WEBHOOK_RECEIVED] Event: ${event?.event || event?.type || 'unknown'}`);
+
+    if (config.webhookSecret && signature) {
+      try {
+        const rawBody = JSON.stringify(req.body);
+        const expectedSignature = crypto.createHmac('sha256', config.webhookSecret).update(rawBody).digest('hex');
+        if (signature !== expectedSignature && !signature.includes(expectedSignature)) {
+          console.warn('[2PAY_WEBHOOK_WARNING] HMAC Signature mismatch.');
+        }
+      } catch (err) {
+        console.warn('[2PAY_WEBHOOK_WARNING] Signature verification error:', err);
+      }
+    }
+
+    const eventType = event?.event || event?.type || event?.event_type || '';
+    const data = event?.data || event?.resource || event;
+
+    if (eventType === 'order.paid' || eventType === 'checkout.completed' || eventType === 'payment.succeeded' || event?.status === 'paid' || event?.status === 'completed') {
+      const metadata = data?.metadata || event?.metadata || {};
+      const beatId = metadata.beat_id || data?.beat_id || '';
+      const licenseType = metadata.license_type || data?.license_type || 'basic';
+      const userId = metadata.user_id || data?.user_id || '';
+      const customerEmail = metadata.customer_email || data?.customer_email || data?.payer_email || data?.email || 'customer@kraezelvbeatz.com';
+      const amount = parseFloat(data?.amount || data?.total || '0') || 0;
+      const orderId = data?.id || data?.order_id || `2pay_${Date.now()}`;
+
+      console.log(`[2PAY_FULFILLMENT] Processing paid order ${orderId} for beat ${beatId} (${licenseType}) to ${customerEmail}`);
+
+      if (db) {
+        try {
+          const purchaseRef = db.collection('purchases').doc(`pur_${orderId}`);
+          await purchaseRef.set({
+            purchaseId: `pur_${orderId}`,
+            orderId,
+            beatId,
+            licenseType,
+            userId,
+            customerEmail,
+            amount,
+            currency: 'USD',
+            paymentProvider: '2pay',
+            status: 'completed',
+            updatedAt: new Date().toISOString(),
+            rawWebhook: event
+          }, { merge: true });
+
+          console.log(`[2PAY_FULFILLMENT_SUCCESS] Recorded sale for beat ${beatId} in Firestore.`);
+        } catch (err: any) {
+          console.error('[2PAY_FULFILLMENT_ERROR] Firestore update failed:', err?.message || err);
+        }
+      }
+
+      await sendPushNotification({
+        title: 'KRAEZELV Store - 2Pay Sale!',
+        body: `New Purchase: Beat [${beatId}] (${licenseType.toUpperCase()}) sold via 2Pay!`,
+        url: '/dashboard/sales'
+      });
+    }
+
+    return res.status(200).send('OK');
   });
 
   // API endpoint to serve public PayPal config securely from backend

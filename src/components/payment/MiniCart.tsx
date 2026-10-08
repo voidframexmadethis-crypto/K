@@ -7,6 +7,7 @@ export const MiniCart: React.FC = () => {
   const { items, isOpen, removeFromCart, clearCart, toggleCart } = useCartStore();
   const [couponCode, setCouponCode] = useState('');
   const [isCouponApplied, setIsCouponApplied] = useState(false);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
   const discount = isCouponApplied ? subtotal * 0.1 : 0; // 10% discount for demo/promos
@@ -19,21 +20,27 @@ export const MiniCart: React.FC = () => {
     }
   };
 
-  const handleCheckoutItem = (item: typeof items[0]) => {
-    // Register pending purchase record in Firestore
-    fetch('/api/purchases/create-pending', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        beatId: item.beat.id,
-        expectedAmount: item.price,
-        currency: 'USD'
-      })
-    })
-    .then(res => res.json())
-    .catch(err => {
-      console.warn('[CHECKOUT] Pending purchase registration:', err);
-    });
+  const handleCheckoutItem = async (item: typeof items[0]) => {
+    setIsProcessingCheckout(true);
+    try {
+      const res = await fetch('/api/2pay/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          beatId: item.beat.id,
+          licenseType: item.licenseType,
+          customPrice: item.price
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      }
+    } catch (err) {
+      console.warn('[CHECKOUT] 2Pay checkout error:', err);
+    } finally {
+      setIsProcessingCheckout(false);
+    }
   };
 
   return (
@@ -178,9 +185,10 @@ export const MiniCart: React.FC = () => {
               <div className="space-y-3 pt-2">
                 <button 
                   onClick={() => items[0] && handleCheckoutItem(items[0])}
-                  className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_30px_rgba(147,51,234,0.3)] cursor-pointer"
+                  disabled={isProcessingCheckout}
+                  className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_30px_rgba(147,51,234,0.3)] cursor-pointer disabled:opacity-50"
                 >
-                  <Lock size={12} /> SECURE CHECKOUT <ArrowRight size={14} />
+                  <Lock size={12} /> {isProcessingCheckout ? 'PROCESSING 2PAY...' : 'SECURE 2PAY CHECKOUT'} <ArrowRight size={14} />
                 </button>
 
                 <div className="flex items-center justify-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] text-white/30 text-center pt-2">

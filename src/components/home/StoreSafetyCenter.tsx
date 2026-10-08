@@ -9,9 +9,9 @@ export const StoreSafetyCenter: React.FC = () => {
       description: 'Instant delivery of clean, high-fidelity 24-bit 44.1kHz WAV and 320kbps MP3 audio files with all voice tags removed upon checkout.'
     },
     {
-      title: 'ENCRYPTED PAYHIP CHECKOUT',
+      title: 'ENCRYPTED 2PAY CHECKOUT',
       icon: Lock,
-      description: '256-bit SSL encrypted transactions powered directly by Payhip, supporting Credit Cards, Apple Pay, and Personal PayPal.'
+      description: '256-bit SSL encrypted transactions powered directly by 2Pay, supporting Credit Cards, Apple Pay, and Google Pay.'
     },
     {
       title: 'LEGAL PDF AGREEMENT CONTRACT',

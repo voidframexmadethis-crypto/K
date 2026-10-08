@@ -23,9 +23,9 @@ export const ArtistStarterGuide: React.FC = () => {
     },
     {
       num: '04',
-      title: 'PAYHIP CHECKOUT',
+      title: '2PAY CHECKOUT',
       icon: ShoppingBag,
-      desc: 'Complete instant encrypted purchase via Credit Card or PayPal directly through the Payhip bridge.'
+      desc: 'Complete instant encrypted purchase via Credit Card or PayPal directly through 2Pay.'
     },
     {
       num: '05',

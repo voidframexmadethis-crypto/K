@@ -311,7 +311,7 @@ export const HeroSpotlightCarousel: React.FC = () => {
                 </div>
                 <h4 className="text-sm font-black uppercase text-white tracking-widest">Awaiting Your Audio Drops</h4>
                 <p className="text-[10px] text-white/40 uppercase tracking-widest leading-relaxed">
-                  Connect your Personal PayPal via Payhip and upload beats to publish your first hit release here.
+                  Connect 2Pay and upload beats to publish your first hit release here.
                 </p>
               </div>
             )}

@@ -13,6 +13,7 @@ interface LicensingModalProps {
 export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, onClose }) => {
   const [selectedTier, setSelectedTier] = useState<'basic' | 'premium' | 'unlimited' | 'exclusive'>('basic');
   const [added, setAdded] = useState(false);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const { addToCart } = useCartStore();
 
   if (!isOpen || !beat) return null;
@@ -90,24 +91,32 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
     }, 1000);
   };
 
-  const handleInstantCheckout = () => {
-    fetch('/api/purchases/create-pending', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        beatId: beat.id,
-        expectedAmount: activeOption.price,
-        currency: 'USD'
-      })
-    })
-    .then(() => {
+  const handleInstantCheckout = async () => {
+    setIsProcessingCheckout(true);
+    try {
+      const res = await fetch('/api/2pay/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          beatId: beat.id,
+          licenseType: activeOption.id,
+          customPrice: activeOption.price
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        addToCart(beat, activeOption.id, activeOption.price);
+        onClose();
+      }
+    } catch (err) {
+      console.warn('[2PAY_CHECKOUT_ERROR]', err);
       addToCart(beat, activeOption.id, activeOption.price);
       onClose();
-    })
-    .catch(() => {
-      addToCart(beat, activeOption.id, activeOption.price);
-      onClose();
-    });
+    } finally {
+      setIsProcessingCheckout(false);
+    }
   };
 
   return (
@@ -234,9 +243,10 @@ export const LicensingModal: React.FC<LicensingModalProps> = ({ beat, isOpen, on
 
               <button 
                 onClick={handleInstantCheckout}
-                className="w-full py-4 border border-white/20 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/[0.05] transition-all"
+                disabled={isProcessingCheckout}
+                className="w-full py-4 border border-purple-500/30 bg-purple-950/20 hover:bg-purple-900/30 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
-                <Lock size={12} /> INSTANT CHECKOUT
+                <Lock size={12} className="text-purple-400" /> {isProcessingCheckout ? 'LAUNCHING 2PAY...' : 'INSTANT 2PAY CHECKOUT'}
               </button>
             </div>
           </div>
